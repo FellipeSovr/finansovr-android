@@ -11,6 +11,8 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
+import android.media.AudioAttributes;
+import android.os.VibrationAttributes;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
@@ -64,7 +66,7 @@ public class FzPlugin extends Plugin {
     @PluginMethod
     public void info(PluginCall call) {
         JSObject r = new JSObject();
-        String v = "7.1.0";
+        String v = "7.1.1";
         try {
             PackageInfo pi = getContext().getPackageManager().getPackageInfo(getContext().getPackageName(), 0);
             if (pi.versionName != null) v = pi.versionName;
@@ -76,12 +78,17 @@ public class FzPlugin extends Plugin {
         call.resolve(r);
     }
 
-    // v7.1: vibração igual à do navegador (duração em milissegundos). A 7.0 usava efeitos prontos do Android,
-    // que no HyperOS não vibravam.
+    // v7.1.1: vibração pelo motor com uso "toque" (o mesmo canal da vibração ao tocar no sistema). A 7.0 usava efeitos
+    // prontos e a 7.1.0 vibrava sem dizer o uso: no HyperOS, as duas formas podem ser silenciadas.
+    // A resposta diz o que o celular informa, para o app explicar quando a vibração está desligada no sistema.
     @PluginMethod
     public void vibrar(PluginCall call) {
         Integer v0 = call.getInt("ms", 8);
-        int ms = Math.max(5, Math.min(80, v0 == null ? 8 : v0));
+        int ms = Math.max(8, Math.min(80, v0 == null ? 8 : v0));
+        JSObject r = new JSObject();
+        boolean tem = false;
+        int toque = 1;
+        try { toque = Settings.System.getInt(getContext().getContentResolver(), Settings.System.HAPTIC_FEEDBACK_ENABLED, 1); } catch (Exception ignored) {}
         try {
             Vibrator v;
             if (Build.VERSION.SDK_INT >= 31) {
@@ -90,12 +97,24 @@ public class FzPlugin extends Plugin {
             } else {
                 v = (Vibrator) getContext().getSystemService(Context.VIBRATOR_SERVICE);
             }
-            if (v != null && v.hasVibrator()) {
-                if (Build.VERSION.SDK_INT >= 26) v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
-                else v.vibrate(ms);
+            tem = v != null && v.hasVibrator();
+            if (tem) {
+                if (Build.VERSION.SDK_INT >= 33 && toque != 0) {
+                    v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE),
+                            VibrationAttributes.createForUsage(VibrationAttributes.USAGE_TOUCH));
+                } else if (Build.VERSION.SDK_INT >= 26) {
+                    v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE),
+                            new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION).build());
+                } else {
+                    v.vibrate(ms);
+                }
             }
-        } catch (Exception ignored) {}
-        call.resolve();
+        } catch (Exception e) {
+            p(r, "erro", e.getMessage() == null ? "falhou" : e.getMessage());
+        }
+        p(r, "tem", Boolean.valueOf(tem));
+        p(r, "toque", Boolean.valueOf(toque != 0));
+        call.resolve(r);
     }
 
     @PluginMethod

@@ -20,7 +20,7 @@
         android:ellipsize="end" android:maxLines="1" android:textColor="@color/wd_t2" android:textSize="11.5sp" />
     <TextView android:id="@+id/wp_estado" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp"
         android:maxLines="1" android:textColor="@color/wd_ok" android:textSize="11.5sp" android:fontFamily="@font/fz_jakarta_700" />
-    <View android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
     <TextView android:id="@+id/wp_rodape" android:layout_width="match_parent" android:layout_height="wrap_content" android:maxLines="1"
         android:textColor="@color/wd_t3" android:textSize="10sp" />
 </LinearLayout>

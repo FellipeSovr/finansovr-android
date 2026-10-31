@@ -2974,8 +2974,17 @@ function vibOn() { try { return localStorage.getItem(CV + 'vib') !== '0'; } catc
 function alternarVib() {
   const on_ = !vibOn();
   try { localStorage.setItem(CV + 'vib', on_ ? '1' : '0'); } catch (e) {}
-  set(); if (on_) vib(12);
-  toast(on_ ? 'Vibração ligada' : 'Vibração desligada');
+  set();
+  if (!on_) { toast('Vibração desligada'); return; }
+  const p = FZP();
+  if (!(NAT.app && p)) { vib(12); toast('Vibração ligada'); return; }
+  // no APK, o lado nativo diz se o celular tem motor e se o "Feedback tátil" do sistema está ligado
+  p.vibrar({ ms: 20 }).then(r => {
+    if (r && r.tem === false) toast('Vibração ligada, mas o celular não informou um motor de vibração');
+    else if (r && r.erro) toast('Vibração ligada, mas o Android recusou: ' + r.erro);
+    else if (r && r.toque === false) toast('Vibração ligada. O "Feedback tátil" do celular está desligado: ligue em Configurações › Som e vibração');
+    else toast('Vibração ligada');
+  }).catch(() => toast('Vibração ligada'));
 }
 
 // ---------- voltar (gesto da borda): fecha o que estiver aberto, um nível por vez
