@@ -32,7 +32,7 @@ try:
     for i, f in enumerate(sorted(set(re.findall(r'url\((https://fonts\.gstatic\.com/[^)]+)\)', css)))):
         nome = 'f%d.woff2' % i
         open(os.path.join(WWW, 'fontes', nome), 'wb').write(urllib.request.urlopen(urllib.request.Request(f, headers=UA), timeout=30).read())
-        css = css.replace(f, 'fontes/' + nome)
+        css = css.replace(f, nome)   # caminho relativo ao próprio fontes.css
     open(os.path.join(WWW, 'fontes', 'fontes.css'), 'w', encoding='utf-8').write(css)
     html = re.sub(r'<link rel="stylesheet" href="https://fonts\.googleapis\.com/css2[^"]*">', '<link rel="stylesheet" href="fontes/fontes.css">', html)
     html = re.sub(r'<link rel="preconnect"[^>]*>\n?', '', html)
