@@ -1,0 +1,8 @@
+node_modules/
+android/
+www/
+.sem_api
+.sem_chave
+build.log
+*.jks
+*.keystore

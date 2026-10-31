@@ -1,0 +1,96 @@
+name: Gerar APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Dependências do Capacitor
+        run: npm install --no-audit --no-fund 2>&1 | tee -a build.log
+
+      - name: Preparar o app (API, repositório e fonte)
+        env:
+          FZ_REPO: ${{ github.repository }}
+        run: python3 ci/preparar.py 2>&1 | tee -a build.log; test ${PIPESTATUS[0]} -eq 0
+
+      - name: Projeto Android
+        run: |
+          set -o pipefail
+          npx cap add android 2>&1 | tee -a build.log
+          python3 ci/patch_android.py 2>&1 | tee -a build.log
+          npx cap sync android 2>&1 | tee -a build.log
+
+      - name: Chave de assinatura
+        env:
+          FZ_KEYSTORE: ${{ secrets.FZ_KEYSTORE }}
+        run: |
+          if [ -z "$FZ_KEYSTORE" ]; then
+            echo "::warning::Sem o segredo FZ_KEYSTORE: assinatura temporária, sem publicar versão." | tee -a build.log
+            keytool -genkeypair -keystore android/app/finansovr.jks -alias finansovr -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass temporaria -keypass temporaria -dname "CN=Teste" -noprompt
+            touch .sem_chave
+          else
+            echo "$FZ_KEYSTORE" | base64 -d > android/app/finansovr.jks
+          fi
+
+      - name: Compilar o APK
+        env:
+          FZ_KS_SENHA: ${{ secrets.FZ_KEYSTORE_SENHA || 'temporaria' }}
+        run: |
+          set -o pipefail
+          cd android && chmod +x gradlew && ./gradlew assembleRelease --no-daemon --console=plain 2>&1 | tee -a ../build.log
+
+      - name: Publicar a versão
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(tr -d ' \n' < versao.txt)
+          cp android/app/build/outputs/apk/release/app-release.apk "Finansovr-$V.apk"
+          if [ -f .sem_api ] || [ -f .sem_chave ]; then
+            echo "Sem o endereço da API ou sem a chave de assinatura: APK só de teste (fica nos artefatos desta execução)." | tee -a build.log
+          elif gh release view "v$V" >/dev/null 2>&1; then
+            echo "A versão v$V já existe; o APK fica só nos artefatos desta execução." | tee -a build.log
+          else
+            gh release create "v$V" "Finansovr-$V.apk" --title "Finansovr $V" --notes-file "notas/$V.md" | tee -a build.log
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: Finansovr-apk
+          path: Finansovr-*.apk
+
+      # registro da compilação num ramo à parte (para conferir erros sem abrir o Actions)
+      - name: Guardar o registro
+        if: always()
+        env:
+          RESULTADO: ${{ job.status }}
+        run: |
+          mkdir -p /tmp/reg && cd /tmp/reg
+          git init -q && git checkout -q -b registro
+          { echo "resultado: $RESULTADO"; echo "commit: $GITHUB_SHA"; echo "quando: $(date -u +%FT%TZ)"; echo; grep -nE "error:|ERROR|FAILURE|What went wrong|::error::|e: |warning: \[deprecation\]" "$GITHUB_WORKSPACE/build.log" | head -80; echo; echo "----- final do registro -----"; tail -150 "$GITHUB_WORKSPACE/build.log"; } > registro.txt
+          git add registro.txt
+          git -c user.name="finansovr-ci" -c user.email="ci@users.noreply.github.com" commit -q -m "registro $GITHUB_SHA ($RESULTADO)"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" registro

@@ -1,0 +1,13 @@
+{
+  "name": "finansovr-android",
+  "version": "7.0.0",
+  "private": true,
+  "description": "Finansovr como app Android (Capacitor). As telas são as mesmas do app no Apps Script.",
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}

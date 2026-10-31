@@ -1,0 +1,11 @@
+{
+  "appId": "br.finansovr.app",
+  "appName": "Finansovr",
+  "webDir": "www",
+  "backgroundColor": "#071430",
+  "android": {
+    "backgroundColor": "#071430",
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  }
+}
