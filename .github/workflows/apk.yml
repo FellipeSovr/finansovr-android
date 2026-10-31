@@ -90,7 +90,7 @@ jobs:
         run: |
           mkdir -p /tmp/reg && cd /tmp/reg
           git init -q && git checkout -q -b registro
-          { echo "resultado: $RESULTADO"; echo "commit: $GITHUB_SHA"; echo "quando: $(date -u +%FT%TZ)"; echo; grep -nE "error:|ERROR|FAILURE|What went wrong|::error::|e: |warning: \[deprecation\]" "$GITHUB_WORKSPACE/build.log" | head -80; echo; echo "----- final do registro -----"; tail -150 "$GITHUB_WORKSPACE/build.log"; } > registro.txt
+          { echo "resultado: $RESULTADO"; echo "commit: $GITHUB_SHA"; echo "quando: $(date -u +%FT%TZ)"; echo; grep -nE "error:|ERROR|FAILURE|What went wrong|::error::|::warning::|Projeto Android ajustado|Fonte|www/index.html pronto|release|já existe|só de teste" "$GITHUB_WORKSPACE/build.log" | head -80; echo; echo "----- final do registro -----"; tail -150 "$GITHUB_WORKSPACE/build.log"; } > registro.txt
           git add registro.txt
           git -c user.name="finansovr-ci" -c user.email="ci@users.noreply.github.com" commit -q -m "registro $GITHUB_SHA ($RESULTADO)"
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" registro
