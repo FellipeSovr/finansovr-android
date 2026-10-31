@@ -613,7 +613,7 @@ function mesAtual(){ return (EXTRAS && EXTRAS.mes && EXTRAS.mes.ref ? EXTRAS.mes
 function expMov(r){
   return (r.itens || []).map(x => ({linha:x.l, data:x.d, desc:x.ds, cat:x.c, meio:x.me, cartao:x.ca, tipo:x.t, valor:x.v, parcAtual:x.pa, parcTotal:x.pt,
     terceiros:x.te, mesFatura:x.mf, recAte:x.ra, recorrencia:x.rc, status:x.st, origem:x.o, ref:x.r, obs:x.ob, mesIni:x.mi, mesFim:x.mu,
-    mesConsiderado:x.mi, valorCons:x.vc, suaParte:x.sp, reservada:x.z, alerta:x.a, id:x.id, mesCobranca:x.mc, arquivado:!!x.ar}));
+    mesConsiderado:x.mi, valorCons:x.vc, suaParte:x.sp, reservada:x.z, alerta:x.a, id:x.id, mesCobranca:x.mc, arquivado:!!x.ar, diaLimite:x.dl === undefined ? null : x.dl}));
 }
 const MOVX = {};                                       // itens expandidos por chave
 async function movimento(m, voltar, render){
@@ -654,9 +654,9 @@ function horasTxt(valor){
 }
 const COMO = [
   ['Como o mês é calculado', 'O livre do mês é a renda menos a meta de sobra, as parcelas, as assinaturas e contas recorrentes, as reservas e os gastos avulsos já feitos. Dividido pelos dias que faltam, vira o limite do dia.', 'Renda R$ 7.000 − meta R$ 1.000 − parcelas R$ 2.900 − recorrentes R$ 600 − reservas R$ 1.200 = R$ 1.300 para avulsos. Em 31 dias, ~R$ 42 por dia.'],
-  ['Quando um gasto conta', 'Compra à vista conta no dia e no mês da compra. Parcelado: a 1ª parcela conta no mês da compra e as outras nos meses seguintes. Assinatura e conta recorrente contam no mês em que são cobradas. A fatura do cartão (Vencimentos) segue o mês em que ela fecha.', 'Celular de R$ 1.200 em 10× comprado em 28/10: R$ 120 em outubro, novembro… até julho.'],
+  ['Quando um gasto conta', 'Compra à vista conta no dia e no mês da compra. Parcelado: a 1ª parcela conta no dia da compra (gasto do dia) e as outras saem do livre dos meses seguintes, pela data da compra e não pela fatura. Assinatura e conta recorrente contam no mês em que são cobradas. A fatura do cartão (Vencimentos) segue o mês em que ela fecha.', 'Celular de R$ 1.200 em 10× comprado em 28/10: R$ 120 no dia 28/10 e R$ 120 em cada mês de novembro a julho.'],
   ['Semana e limite do dia', 'O orçamento da semana é a parte do livre que cabe nos dias da semana dentro do mês. Gastou menos num dia, os próximos ganham folga; gastou mais, diminuem. No campo amarelo você informa um gasto que ainda não foi lançado. As cores do calendário: verde até 80% do limite, laranja até 100%, vermelho acima, cinza sem gasto.', 'Limite de R$ 40 e gasto de R$ 30 = verde (75%).'],
-  ['Reservas', 'Categorias com "Reservar" ligado (ex.: gasolina, terapia) já têm o valor separado no mês: gastar nelas sai da reserva, não do limite do dia.', 'Gasolina planejada R$ 400: o limite do dia já desconta esse valor desde o dia 1.'],
+  ['Reservas', 'Categorias com "Reservar" ligado (ex.: gasolina, terapia) já têm o valor separado no mês: gastar nelas sai da reserva, não do limite do dia. O que passar do planejado conta como gasto do dia em que passou.', 'Gasolina planejada R$ 1.000: com R$ 997 já gastos, um abastecimento de R$ 100 usa R$ 3 da reserva e R$ 97 contam no limite do dia.'],
   ['Terceiros e reembolsos', 'Quando alguém divide uma conta, a parte dela não conta para você. Em Reembolsos você vê quanto falta receber, cobra pelo WhatsApp e registra o que chegou. Reembolso não aumenta o limite: só abate o que falta receber.', 'Jantar de R$ 200 dividido ao meio: a sua parte é R$ 100.'],
   ['Vencimentos', 'Faturas pelo dia de vencimento de cada cartão, contas recorrentes no dia em que vencem e contas avulsas (IPVA, IPTU, anuidade), que contam como gasto no mês em que vencem. E-mail 3 dias antes e no dia. Quando o pagamento chega no extrato, a importação atualiza o valor.', 'IPVA de R$ 1.250 em janeiro: janeiro já nasce com esse valor comprometido.'],
   ['Importação', 'Faturas e extratos na pasta "A importar" entram todo domingo às 18h ou quando você pede "importar finanças" ao Claude. Entram as compras, parcelas novas, débitos e Pix de consumo. Nunca entram: pagamento de fatura, investimentos, transferências entre contas suas e entradas. PDF com senha fica aguardando: informe a senha na conversa (ela não é salva). Cada importação deixa um relatório em Mais › Importar.', ''],
@@ -1296,7 +1296,7 @@ function registrarHist() { acao(() => call('registrarHistorico'), 'Posição do 
 function meioTxt(x) { return x.meio === 'Crédito' ? 'crédito' + (x.cartao ? ' ' + semCart(x.cartao) : '') : String(x.meio || 'sem meio').toLowerCase(); }
 function sbLanc(x, m, semData) {
   let s = curto(x.cat || 'Sem categoria');
-  if (x.reservada && x.tipo === 'Único') return 'Sai da reserva, não conta no limite';
+  if (x.reservada && (x.tipo === 'Único' || (x.tipo === 'Parcelado' && (Number(x.parcAtual) || 1) <= 1 && (!m || x.mesIni === m)))) return txtReserva(x);
   if (x.tipo === 'Parcelado') s += ', parcela ' + parcNoMes(x, m || x.mesIni) + ' de ' + x.parcTotal;
   else if (x.tipo === 'Recorrente') s += ', recorrente';
   else s += ', ' + meioTxt(x);
@@ -1306,6 +1306,8 @@ function sbLanc(x, m, semData) {
   if (x.arquivado) s += ' · arquivado';
   return s;
 }
+// v7.2.1: categoria reservada: o que passa do planejado conta no limite do dia
+function txtReserva(x) { const d = Number(x.diaLimite) || 0; return d > 0.004 ? fm(d) + ' passou da reserva e conta no limite' : 'Sai da reserva, não conta no limite'; }
 function sbLancH(x, m, semData) { const s = esc(sbLanc(x, m, semData)); return x.alerta ? `<span style="color:var(--bad)">${esc(x.alerta)}</span> · ${s}` : s; }
 function itensDoDia(iso) {
   const it = movLocal(iso.slice(0, 7)); if (!it) return null;
@@ -1375,7 +1377,7 @@ function detalheDiaHTML(s, si) {
     if (!its) { carregarMov(s.data.slice(0, 7), 1); itens = '<span class="sk" data-k="isk" style="height:38px;margin-top:12px"></span>'; }
     else {
       const av = its.avulsos.concat(its.parcelados);
-      if (av.length) itens = `<div style="margin-top:10px" data-k="its">${av.map(x => { const a = icDe(x.cat); return `<div role="button" tabindex="0" onclick="${on(() => editarGasto(x.linha))}" style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--ln);cursor:pointer">${icSpan(a[1], ih(a[0]), 34, 12, 18, 1.7)}<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.desc)}</div><div style="font-size:12px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.reservada ? 'Sai da reserva, não conta no limite' : sbLancH(x, s.data.slice(0, 7), true)}</div></div><div style="font-size:14px;font-weight:700">${fm(x.suaParte)}</div></div>`; }).join('')}</div>`;
+      if (av.length) itens = `<div style="margin-top:10px" data-k="its">${av.map(x => { const a = icDe(x.cat); return `<div role="button" tabindex="0" onclick="${on(() => editarGasto(x.linha))}" style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--ln);cursor:pointer">${icSpan(a[1], ih(a[0]), 34, 12, 18, 1.7)}<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.desc)}</div><div style="font-size:12px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.reservada ? esc(txtReserva(x)) : sbLancH(x, s.data.slice(0, 7), true)}</div></div><div style="font-size:14px;font-weight:700">${fm(x.suaParte)}</div></div>`; }).join('')}</div>`;
     }
   }
   return `<div class="gl ${S.selK % 2 ? 'dA' : 'dB'}" style="margin:12px 16px 0;border-radius:28px;padding:16px 18px 18px">
@@ -2219,24 +2221,40 @@ function sugerirCatF(desc) {
   if (m.cat !== f.cat) { S.sugK++; S.rolarPick = true; }
   S.f = Object.assign({}, f, p); set();
 }
+// v7.2.1: quanto de um gasto conta no limite do dia: à vista inteiro; parcelado só a 1ª parcela, no dia da compra;
+// em categoria reservada, só o que passar do que ainda resta da reserva no mês
+function gastoNoDia(o, v) {
+  const tipo = o.tipo || 'Único', pa = Number(o.pa || o.parcAtual) || 1, dt = String(o.data || hojeIso());
+  if (tipo === 'Recorrente' || (tipo === 'Parcelado' && pa > 1)) return { dia: 0, fora: true };
+  const res = (LISTAS && LISTAS.reservadas || []).includes(o.cat);
+  if (!res) return { dia: v };
+  const r = LISTAS.resta && dt.slice(0, 7) === mesAtual() ? LISTAS.resta[o.cat] : undefined;
+  if (r === undefined) return { dia: 0, res: true, resta: null };
+  return { dia: Math.max(0, v - r), res: true, resta: r };
+}
 function pvLanc(f, v, vTot) {
   if (!(v > 0)) return null;
-  const dt = dataF(f), sem = semInfo();
-  if (f.tipo === 'Parcelado') return ['neu', 'Parcela ' + f.pa + ' de ' + f.parc + ', ' + fm(v) + ' cada. Total ' + fm(v * f.parc) + '.'];
-  if (f.tipo === 'Recorrente') return ['neu', fm(v) + ' todo mês' + (f.recAte ? ', até ' + f.recAte.split('-').reverse().join('/') : '') + '.'];
-  if (f.edit) return null;
-  if ((LISTAS && LISTAS.reservadas || []).includes(f.cat)) return ['neu', 'Sai da reserva de ' + curto(f.cat) + ', não do limite do dia.'];
+  const dt = dataF(f), sem = semInfo(), gd = gastoNoDia(Object.assign({}, f, { data: dt }), v), cat = curto(f.cat);
+  if (f.tipo === 'Recorrente') return ['neu', fm(v) + ' todo mês' + (f.recAte ? ', até ' + f.recAte.split('-').reverse().join('/') : '') + '. Sai do livre do mês, não do limite do dia.'];
+  if (f.tipo === 'Parcelado' && gd.fora) return ['neu', 'Parcela ' + f.pa + ' de ' + f.parc + ', ' + fm(v) + ' cada. Sai do livre do mês, não do limite do dia.'];
+  const parc = f.tipo === 'Parcelado' ? '1ª parcela de ' + f.parc + ' (' + fm(v) + '): conta no dia da compra; as outras saem do livre dos próximos meses. ' : '';
+  if (f.edit) return parc ? ['neu', parc.trim()] : null;
+  if (gd.res && gd.resta === null) return ['neu', parc + 'Sai primeiro da reserva de ' + cat + '; o que passar dela conta no limite do dia.'];
+  if (gd.res && !(gd.dia > 0.004)) return ['neu', parc + 'Sai da reserva de ' + cat + ' (restam ' + fm(gd.resta) + '), não do limite do dia.'];
+  const pre = parc + (gd.res ? fm(gd.dia) + ' passam da reserva de ' + cat + ' e contam no limite do dia. ' : '');
+  v = gd.dia;
   const pode = DADOS && DADOS.hoje ? DADOS.hoje.podeHojeNum : '';
   if (dt === hojeIso() && typeof pode === 'number') {
     const nh = pode - v;
-    if (nh >= -0.004) return ['ok', 'Depois deste gasto, hoje ainda sobram ' + fm(nh) + '.'];
+    const r = (x) => [x[0], pre + x[1]];
+    if (nh >= -0.004) return r(['ok', 'Depois deste gasto, hoje ainda sobram ' + fm(nh) + '.']);
     const resto = sem.sem.filter(s => s.data > dt && s.situacao !== 'Fora do mês'), am = sem.rest - v;
-    if (resto.length === 1) return ['bad', 'Hoje passa ' + fm(-nh) + ' do limite. ' + resto[0].dia + ' fica com ' + fm(Math.max(0, am)) + '.'];
-    if (resto.length > 1) return ['bad', 'Hoje passa ' + fm(-nh) + ' do limite. Os outros ' + resto.length + ' dias da semana ficam com ' + fm(Math.max(0, am) / resto.length) + ' por dia.'];
-    return ['bad', 'Hoje passa ' + fm(-nh) + ' do limite. A semana fecha ' + fm(Math.abs(am)) + (am < 0 ? ' acima do orçamento.' : ' abaixo do orçamento.')];
+    if (resto.length === 1) return r(['bad', 'Hoje passa ' + fm(-nh) + ' do limite. ' + resto[0].dia + ' fica com ' + fm(Math.max(0, am)) + '.']);
+    if (resto.length > 1) return r(['bad', 'Hoje passa ' + fm(-nh) + ' do limite. Os outros ' + resto.length + ' dias da semana ficam com ' + fm(Math.max(0, am) / resto.length) + ' por dia.']);
+    return r(['bad', 'Hoje passa ' + fm(-nh) + ' do limite. A semana fecha ' + fm(Math.abs(am)) + (am < 0 ? ' acima do orçamento.' : ' abaixo do orçamento.')]);
   }
-  if (dt < hojeIso()) return ['neu', 'Conta no dia ' + dBr(dt) + ' (' + DABR[new Date(dt + 'T12:00:00').getDay()] + ').'];
-  return ['neu', 'Compra com data futura: ' + dBr(dt) + '.'];
+  if (dt < hojeIso()) return ['neu', pre + 'Conta no dia ' + dBr(dt) + ' (' + DABR[new Date(dt + 'T12:00:00').getDay()] + ').'];
+  return ['neu', pre + 'Compra com data futura: ' + dBr(dt) + '.'];
 }
 function lancarHTML() {
   const f = S.f, vTot = numBR(f.valor) || 0, tercN = f.div ? Math.min(numBR(f.terc) || 0, vTot) : 0, v = vTot - tercN;
@@ -2323,7 +2341,7 @@ function salvarGasto() {
     const p = segundoPlano(gasto('salvarLancamento', o), null,
       (r) => { if (r && r.linha) { NOVOS64[r.linha] = 1; setTimeout(() => marcarNovo(r.linha), 900); } if (r && r.aprender) setTimeout(() => abrirG('lembrar', { a: r.aprender }), 700); return atualizarPainel(); },
       () => { S.f = Object.assign({}, f); abrirSheet('lancar'); });
-    if (!edit && o.tipo === 'Único' && o.data >= ((semInfo().sem[0] || {}).data || '9999')) natLimite(vTot - (numBR(o.terceiros) || 0));
+    if (!edit && o.data >= ((semInfo().sem[0] || {}).data || '9999')) { const gd = gastoNoDia(o, (numBR(o.valor) || 0) - (numBR(o.terceiros) || 0)); if (gd.dia > 0.004) natLimite(gd.dia); }
     if (edit && orig) toast('Alterações salvas', () => segundoPlano(gasto('restaurarLancamentos', [orig]), 'Alteração desfeita', atualizarPainel));
     else toast('Gasto salvo', () => segundoPlano(async () => { const r = await p; if (r && r.linha) return callGasto('restaurarLancamentos', [{ linha: r.linha, excluir: true }]); }, 'Lançamento desfeito', atualizarPainel));
   }, reduz() ? 0 : 450);
@@ -3044,7 +3062,7 @@ function itemLocal(o, linha, pend) {
   return { linha, data: o.data, desc: o.desc, cat: o.cat, meio: o.meio, cartao: o.cartao || '', tipo: o.tipo || 'Único', valor: v, parcAtual: o.parcAtual || '', parcTotal: o.parcTotal || '',
     terceiros: o.terceiros === '' || o.terceiros === undefined ? '' : t, mesFatura: o.mesFatura || '', recAte: o.recAte || '', recorrencia: o.recorrencia || '', status: o.status || 'Ativo', origem: 'App', ref: '', obs: o.obs || '',
     mesIni: m, mesFim: o.tipo === 'Parcelado' ? addMes(m, (Number(o.parcTotal) || 1) - (Number(o.parcAtual) || 1)) : o.tipo === 'Recorrente' ? (o.recAte || addMes(m, 120)) : m,
-    mesConsiderado: m, valorCons: v, suaParte: v - t, reservada: false, alerta: '', id: '', mesCobranca: '', arquivado: false, pend };
+    mesConsiderado: m, valorCons: v, suaParte: v - t, reservada: (LISTAS && LISTAS.reservadas || []).includes(o.cat), diaLimite: gastoNoDia(o, v - t).dia, alerta: '', id: '', mesCobranca: '', arquivado: false, pend };
 }
 function porNaLista(x) {
   if (!LANCS.some(y => y.linha === x.linha)) LANCS.push(x);
