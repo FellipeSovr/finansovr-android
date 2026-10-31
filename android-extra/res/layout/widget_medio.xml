@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wm_raiz" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@drawable/wd_fundo" android:orientation="horizontal" android:padding="14dp">
+    <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+            <ImageView android:layout_width="16dp" android:layout_height="16dp" android:src="@mipmap/ic_launcher_round" android:importantForAccessibility="no" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:text="Pode gastar hoje"
+                android:textColor="@color/wd_t2" android:textSize="12sp" android:fontFamily="@font/fz_jakarta_600" />
+        </LinearLayout>
+        <TextView android:id="@+id/wm_valor" android:layout_width="match_parent" android:layout_height="38dp" android:layout_marginTop="2dp"
+            android:autoSizeMaxTextSize="30sp" android:autoSizeMinTextSize="16sp" android:autoSizeTextType="uniform" android:gravity="center_vertical"
+            android:maxLines="1" android:textColor="@color/wd_tx" android:fontFamily="@font/fz_jakarta_800" />
+        <FrameLayout android:layout_width="match_parent" android:layout_height="6dp" android:layout_marginTop="6dp">
+            <ProgressBar android:id="@+id/wm_barra" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="6dp"
+                android:max="1000" android:progressDrawable="@drawable/wd_barra" />
+            <ProgressBar android:id="@+id/wm_barra_neg" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="6dp"
+                android:max="1000" android:progressDrawable="@drawable/wd_barra_neg" android:visibility="gone" />
+        </FrameLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:orientation="horizontal">
+            <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginEnd="16dp" android:orientation="vertical">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Na semana" android:textColor="@color/wd_t2" android:textSize="11.5sp" />
+                <TextView android:id="@+id/wm_semana" android:layout_width="wrap_content" android:layout_height="wrap_content" android:maxLines="1" android:textColor="@color/wd_tx" android:textSize="14sp" android:fontFamily="@font/fz_jakarta_800" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Livre no mês" android:textColor="@color/wd_t2" android:textSize="11.5sp" />
+                <TextView android:id="@+id/wm_livre" android:layout_width="wrap_content" android:layout_height="wrap_content" android:maxLines="1" android:textColor="@color/wd_tx" android:textSize="14sp" android:fontFamily="@font/fz_jakarta_800" />
+            </LinearLayout>
+        </LinearLayout>
+        <TextView android:id="@+id/wm_rodape" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"
+            android:ellipsize="end" android:maxLines="1" android:textColor="@color/wd_t3" android:textSize="10.5sp" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="128dp" android:layout_height="match_parent" android:layout_marginStart="12dp" android:gravity="center_vertical" android:orientation="vertical">
+        <LinearLayout android:id="@+id/wm_q1" android:layout_width="match_parent" android:layout_height="38dp" android:layout_marginTop="0dp"
+            android:background="@drawable/wd_botao" android:gravity="center_vertical" android:orientation="horizontal" android:paddingStart="5dp" android:paddingEnd="10dp">
+            <FrameLayout android:layout_width="28dp" android:layout_height="28dp">
+                <ImageView android:id="@+id/wm_q1_bg" android:layout_width="28dp" android:layout_height="28dp" android:src="@drawable/wd_circulo" android:importantForAccessibility="no" />
+                <ImageView android:id="@+id/wm_q1_ic" android:layout_width="15dp" android:layout_height="15dp" android:layout_gravity="center" android:src="@drawable/fz_c_outros" android:importantForAccessibility="no" />
+            </FrameLayout>
+            <TextView android:id="@+id/wm_q1_tx" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="7dp"
+                android:ellipsize="end" android:maxLines="1" android:textColor="@color/wd_tx" android:textSize="12sp" android:fontFamily="@font/fz_jakarta_700" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/wm_q2" android:layout_width="match_parent" android:layout_height="38dp" android:layout_marginTop="7dp"
+            android:background="@drawable/wd_botao" android:gravity="center_vertical" android:orientation="horizontal" android:paddingStart="5dp" android:paddingEnd="10dp">
+            <FrameLayout android:layout_width="28dp" android:layout_height="28dp">
+                <ImageView android:id="@+id/wm_q2_bg" android:layout_width="28dp" android:layout_height="28dp" android:src="@drawable/wd_circulo" android:importantForAccessibility="no" />
+                <ImageView android:id="@+id/wm_q2_ic" android:layout_width="15dp" android:layout_height="15dp" android:layout_gravity="center" android:src="@drawable/fz_c_outros" android:importantForAccessibility="no" />
+            </FrameLayout>
+            <TextView android:id="@+id/wm_q2_tx" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="7dp"
+                android:ellipsize="end" android:maxLines="1" android:textColor="@color/wd_tx" android:textSize="12sp" android:fontFamily="@font/fz_jakarta_700" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/wm_q3" android:layout_width="match_parent" android:layout_height="38dp" android:layout_marginTop="7dp"
+            android:background="@drawable/wd_botao" android:gravity="center_vertical" android:orientation="horizontal" android:paddingStart="5dp" android:paddingEnd="10dp">
+            <FrameLayout android:layout_width="28dp" android:layout_height="28dp">
+                <ImageView android:id="@+id/wm_q3_bg" android:layout_width="28dp" android:layout_height="28dp" android:src="@drawable/wd_circulo" android:importantForAccessibility="no" />
+                <ImageView android:id="@+id/wm_q3_ic" android:layout_width="15dp" android:layout_height="15dp" android:layout_gravity="center" android:src="@drawable/fz_c_outros" android:importantForAccessibility="no" />
+            </FrameLayout>
+            <TextView android:id="@+id/wm_q3_tx" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="7dp"
+                android:ellipsize="end" android:maxLines="1" android:textColor="@color/wd_tx" android:textSize="12sp" android:fontFamily="@font/fz_jakarta_700" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

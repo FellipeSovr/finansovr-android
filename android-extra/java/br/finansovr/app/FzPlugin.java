@@ -1,41 +1,61 @@
 package br.finansovr.app;
 
+import android.Manifest;
+import android.app.Activity;
+import android.content.ClipData;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
 import android.provider.Settings;
 
+import androidx.activity.result.ActivityResult;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.FileProvider;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 import com.google.mlkit.vision.barcode.common.Barcode;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanner;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
+
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
 
-/** Ponte do Finansovr com o Android: versão, vibração, barra de status, arquivos recebidos, atualização e leitor de QR. */
-@CapacitorPlugin(name = "Fz")
+/**
+ * Ponte do Finansovr com o Android: versão, vibração, barra de status, arquivos, atualização, leitor de QR (v7.0)
+ * e, na v7.1, notificações, permissões do guia, widget, atalhos do ícone e a agenda das conferências.
+ */
+@CapacitorPlugin(name = "Fz", permissions = {
+        @Permission(alias = "notificacoes", strings = {Manifest.permission.POST_NOTIFICATIONS})
+})
 public class FzPlugin extends Plugin {
     static volatile JSArray pendentes = null;
+    static volatile String destPendente = null;
 
     private static void p(JSObject o, String k, Object v) {
         try { o.put(k, v); } catch (Exception ignored) {}
@@ -44,7 +64,7 @@ public class FzPlugin extends Plugin {
     @PluginMethod
     public void info(PluginCall call) {
         JSObject r = new JSObject();
-        String v = "7.0.0";
+        String v = "7.1.0";
         try {
             PackageInfo pi = getContext().getPackageManager().getPackageInfo(getContext().getPackageName(), 0);
             if (pi.versionName != null) v = pi.versionName;
@@ -56,10 +76,12 @@ public class FzPlugin extends Plugin {
         call.resolve(r);
     }
 
+    // v7.1: vibração igual à do navegador (duração em milissegundos). A 7.0 usava efeitos prontos do Android,
+    // que no HyperOS não vibravam.
     @PluginMethod
     public void vibrar(PluginCall call) {
         Integer v0 = call.getInt("ms", 8);
-        int ms = v0 == null ? 8 : v0;
+        int ms = Math.max(5, Math.min(80, v0 == null ? 8 : v0));
         try {
             Vibrator v;
             if (Build.VERSION.SDK_INT >= 31) {
@@ -69,14 +91,8 @@ public class FzPlugin extends Plugin {
                 v = (Vibrator) getContext().getSystemService(Context.VIBRATOR_SERVICE);
             }
             if (v != null && v.hasVibrator()) {
-                if (Build.VERSION.SDK_INT >= 29) {
-                    int ef = ms <= 6 ? VibrationEffect.EFFECT_TICK : ms <= 12 ? VibrationEffect.EFFECT_CLICK : ms <= 20 ? VibrationEffect.EFFECT_HEAVY_CLICK : -1;
-                    v.vibrate(ef >= 0 ? VibrationEffect.createPredefined(ef) : VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
-                } else if (Build.VERSION.SDK_INT >= 26) {
-                    v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
-                } else {
-                    v.vibrate(ms);
-                }
+                if (Build.VERSION.SDK_INT >= 26) v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
+                else v.vibrate(ms);
             }
         } catch (Exception ignored) {}
         call.resolve();
@@ -106,6 +122,7 @@ public class FzPlugin extends Plugin {
         call.resolve(r);
     }
 
+    // ---------- atualização (v7.0)
     @PluginMethod
     public void baixar(PluginCall call) {
         final String url = call.getString("url");
@@ -186,18 +203,176 @@ public class FzPlugin extends Plugin {
         GmsBarcodeScannerOptions o = new GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build();
         GmsBarcodeScanner s = GmsBarcodeScanning.getClient(getActivity(), o);
         s.startScan()
-            .addOnSuccessListener(b -> {
-                JSObject r = new JSObject();
-                p(r, "texto", b.getRawValue() == null ? "" : b.getRawValue());
-                call.resolve(r);
-            })
-            .addOnCanceledListener(() -> call.reject("cancelado"))
-            .addOnFailureListener(e -> call.reject(e.getMessage() == null ? "o leitor falhou" : e.getMessage()));
+                .addOnSuccessListener(b -> {
+                    JSObject r = new JSObject();
+                    p(r, "texto", b.getRawValue() == null ? "" : b.getRawValue());
+                    call.resolve(r);
+                })
+                .addOnCanceledListener(() -> call.reject("cancelado"))
+                .addOnFailureListener(e -> call.reject(e.getMessage() == null ? "o leitor falhou" : e.getMessage()));
     }
 
     @PluginMethod
     public void sair(PluginCall call) {
         getActivity().runOnUiThread(() -> getActivity().moveTaskToBack(true));
         call.resolve();
+    }
+
+    // ---------- v7.1: telas abertas por notificação, widget ou atalho
+    @PluginMethod
+    public void destino(PluginCall call) {
+        JSObject r = new JSObject();
+        p(r, "dest", destPendente == null ? "" : destPendente);
+        destPendente = null;
+        call.resolve(r);
+    }
+
+    // ---------- v7.1: endereço da API e chave deste celular, para as conferências com o app fechado
+    @PluginMethod
+    public void credenciais(PluginCall call) {
+        String api = call.getString("api", ""), id = call.getString("id", ""), chave = call.getString("chave", "");
+        Avisos.prefs(getContext()).edit().putString("api", api == null ? "" : api).putString("id", id == null ? "" : id)
+                .putString("chave", chave == null ? "" : chave).apply();
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void agenda(PluginCall call) {
+        Boolean n = call.getBoolean("notif", false), l = call.getBoolean("lembrete", false);
+        Avisos.prefs(getContext()).edit().putBoolean("notif", n != null && n).putBoolean("lembrete", l != null && l).apply();
+        Avisos.canal(getContext());
+        Avisos.agendar(getContext());
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void notificar(PluginCall call) {
+        String tipo = call.getString("tipo", "aviso");
+        Avisos.notificar(getContext(), tipo + ":" + System.currentTimeMillis(), call.getString("tit", "Finansovr"),
+                call.getString("txt", ""), call.getString("acao", ""), call.getString("dest", "painel"));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void widget(PluginCall call) {
+        JSObject d = call.getObject("dados", new JSObject());
+        if (d != null) {
+            Widgets.salvarTudo(getContext(), d);
+            Atalhos.atualizar(getContext(), d.optJSONArray("atalhos"));
+        }
+        call.resolve();
+    }
+
+    // ---------- v7.1: guia "Avisos no celular" (permissão, Início automático e bateria)
+    private boolean notifLiberadas() {
+        return NotificationManagerCompat.from(getContext()).areNotificationsEnabled();
+    }
+
+    private boolean bateriaLivre() {
+        PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+        return pm != null && pm.isIgnoringBatteryOptimizations(getContext().getPackageName());
+    }
+
+    private void ok(PluginCall call, boolean ok) {
+        JSObject r = new JSObject();
+        p(r, "ok", Boolean.valueOf(ok));
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void permissao(PluginCall call) {
+        String t = call.getString("tipo", "");
+        Context ctx = getContext();
+        String pkg = ctx.getPackageName();
+        if ("estado".equals(t)) {
+            JSObject r = new JSObject();
+            p(r, "perm", Boolean.valueOf(notifLiberadas()));
+            p(r, "bat", Boolean.valueOf(bateriaLivre()));
+            call.resolve(r);
+        } else if ("perm".equals(t)) {
+            if (Build.VERSION.SDK_INT >= 33 && getPermissionState("notificacoes") != PermissionState.GRANTED) {
+                requestPermissionForAlias("notificacoes", call, "permVolta");
+            } else if (!notifLiberadas()) {
+                Intent i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, pkg);
+                startActivityForResult(call, i, "configVolta");
+            } else {
+                ok(call, true);
+            }
+        } else if ("auto".equals(t)) {
+            Intent i = new Intent().setComponent(new ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"));
+            if (i.resolveActivity(ctx.getPackageManager()) == null) {
+                i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg));
+            }
+            startActivityForResult(call, i, "autoVolta");
+        } else if ("bat".equals(t)) {
+            if (bateriaLivre()) { ok(call, true); return; }
+            Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + pkg));
+            if (i.resolveActivity(ctx.getPackageManager()) == null) i = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+            startActivityForResult(call, i, "batVolta");
+        } else {
+            call.reject("tipo de permissão desconhecido");
+        }
+    }
+
+    @PermissionCallback
+    private void permVolta(PluginCall call) {
+        ok(call, notifLiberadas());
+    }
+
+    @ActivityCallback
+    private void configVolta(PluginCall call, ActivityResult r) {
+        ok(call, notifLiberadas());
+    }
+
+    @ActivityCallback
+    private void autoVolta(PluginCall call, ActivityResult r) {
+        ok(call, true);
+    }
+
+    @ActivityCallback
+    private void batVolta(PluginCall call, ActivityResult r) {
+        ok(call, bateriaLivre());
+    }
+
+    // ---------- v7.1: atalho "Importar fatura": seletor de arquivos do Android
+    @PluginMethod
+    public void escolherArquivos(PluginCall call) {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("*/*");
+        i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/pdf", "image/*", "text/csv", "text/comma-separated-values",
+                "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/x-ofx", "application/octet-stream"});
+        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        startActivityForResult(call, i, "arquivosVolta");
+    }
+
+    @ActivityCallback
+    private void arquivosVolta(PluginCall call, ActivityResult res) {
+        final Intent d = res.getData();
+        if (res.getResultCode() != Activity.RESULT_OK || d == null) {
+            JSObject r = new JSObject();
+            p(r, "arqs", new JSArray());
+            call.resolve(r);
+            return;
+        }
+        final ArrayList<Uri> uris = new ArrayList<>();
+        ClipData cd = d.getClipData();
+        if (cd != null) {
+            for (int i = 0; i < cd.getItemCount(); i++) {
+                Uri u = cd.getItemAt(i).getUri();
+                if (u != null) uris.add(u);
+            }
+        } else if (d.getData() != null) {
+            uris.add(d.getData());
+        }
+        new Thread(() -> {
+            JSObject r = new JSObject();
+            p(r, "arqs", Arquivos.ler(getContext(), uris, null));
+            call.resolve(r);
+        }).start();
+    }
+
+    static String aspas(String s) {
+        return JSONObject.quote(s == null ? "" : s);
     }
 }

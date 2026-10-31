@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="wd_g1">#F5FFFFFF</color>
+    <color name="wd_g2">#F5F1F5FD</color>
+    <color name="wd_g3">#F5E8EFFC</color>
+    <color name="wd_borda">#1A0E1F45</color>
+    <color name="wd_tx">#FF0E1F45</color>
+    <color name="wd_t2">#B30E1F45</color>
+    <color name="wd_t3">#800E1F45</color>
+    <color name="wd_ok">#FF178A62</color>
+    <color name="wd_neg">#FFD6336C</color>
+    <color name="wd_barra_fundo">#1A0E1F45</color>
+    <color name="wd_botao">#0D0E1F45</color>
+    <color name="wd_botao_borda">#1A0E1F45</color>
+</resources>

@@ -1,12 +1,9 @@
 package br.finansovr.app;
 
 import android.content.Intent;
-import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.OpenableColumns;
-import android.util.Base64;
 import android.view.View;
 import android.webkit.WebView;
 
@@ -19,20 +16,15 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.getcapacitor.BridgeActivity;
-import com.getcapacitor.JSArray;
-import com.getcapacitor.JSObject;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
 import java.util.ArrayList;
 
 /**
- * Finansovr v7.0: tela inteira (edge-to-edge) com as margens das barras passadas para o app,
- * voltar pelo gesto com prévia (Android 14+) e arquivos compartilhados por outros apps.
+ * Finansovr: tela inteira (edge-to-edge) com as margens das barras passadas para o app, voltar pelo gesto com prévia,
+ * arquivos compartilhados por outros apps (v7.0) e telas abertas por notificação, widget ou atalho do ícone (v7.1).
  */
 public class MainActivity extends BridgeActivity {
     static volatile float sat = 0f, sab = 0f;
-    private static final long MAX = 25L * 1024 * 1024;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -40,6 +32,7 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         try { bridge.getWebView().setBackgroundColor(Color.parseColor("#071430")); } catch (Exception ignored) {}
+        Avisos.canal(this);
 
         // margens da barra de status e da barra de gestos; com o teclado aberto, a tela encolhe até ele
         View raiz = findViewById(android.R.id.content);
@@ -103,9 +96,24 @@ public class MainActivity extends BridgeActivity {
         tratarIntent(intent);
     }
 
-    // arquivos recebidos pelo "Compartilhar" de outro app: lidos aqui e entregues ao app pelo plugin
     private void tratarIntent(Intent i) {
         if (i == null) return;
+        // v7.1: notificação, widget ou atalho do ícone pedindo uma tela
+        String dest = i.getStringExtra("dest");
+        if (dest != null && !dest.isEmpty()) {
+            FzPlugin.destPendente = dest;
+            final String q = FzPlugin.aspas(dest);
+            setIntent(new Intent(this, MainActivity.class));
+            runOnUiThread(() -> {
+                try {
+                    bridge.getWebView().evaluateJavascript(
+                            "(function(){try{if(window.__fzIniciou&&window.fzAbrir&&NAT.conectado){fzAbrir(" + q + ");return '1';}}catch(e){}return '0';})()",
+                            r -> { if (r != null && r.contains("1")) FzPlugin.destPendente = null; });
+                } catch (Exception ignored) {}
+            });
+            return;
+        }
+        // v7.0: arquivos recebidos pelo "Compartilhar" de outro app
         String acao = i.getAction();
         final ArrayList<Uri> uris = new ArrayList<>();
         if (Intent.ACTION_SEND.equals(acao)) {
@@ -119,53 +127,8 @@ public class MainActivity extends BridgeActivity {
         final String tipoIntent = i.getType();
         setIntent(new Intent(this, MainActivity.class));
         new Thread(() -> {
-            JSArray arr = new JSArray();
-            for (Uri u : uris) {
-                JSObject o = new JSObject();
-                String nome = "arquivo";
-                long tam = -1;
-                try (Cursor c = getContentResolver().query(u, null, null, null, null)) {
-                    if (c != null && c.moveToFirst()) {
-                        int n = c.getColumnIndex(OpenableColumns.DISPLAY_NAME), s = c.getColumnIndex(OpenableColumns.SIZE);
-                        if (n >= 0) nome = c.getString(n);
-                        if (s >= 0 && !c.isNull(s)) tam = c.getLong(s);
-                    }
-                } catch (Exception ignored) {}
-                String tipo = null;
-                try { tipo = getContentResolver().getType(u); } catch (Exception ignored) {}
-                if (tipo == null) tipo = tipoIntent != null ? tipoIntent : "";
-                try {
-                    o.put("nome", nome);
-                    o.put("tipo", tipo);
-                    try {
-                        if (tam > MAX) throw new Exception("maior que 25 MB");
-                        byte[] b = ler(u);
-                        o.put("tam", b.length);
-                        o.put("dados", Base64.encodeToString(b, Base64.NO_WRAP));
-                    } catch (Exception e) {
-                        o.put("tam", (int) Math.max(0, Math.min(tam, Integer.MAX_VALUE)));
-                        o.put("erro", e.getMessage() == null ? "não deu para ler o arquivo" : e.getMessage());
-                    }
-                } catch (Exception ignored) {}
-                arr.put(o);
-            }
-            FzPlugin.pendentes = arr;
+            FzPlugin.pendentes = Arquivos.ler(this, uris, tipoIntent);
             js("window.fzRecebidos&&fzRecebidos()");
         }).start();
-    }
-
-    private byte[] ler(Uri u) throws Exception {
-        try (InputStream in = getContentResolver().openInputStream(u); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            if (in == null) throw new Exception("não deu para abrir o arquivo");
-            byte[] buf = new byte[65536];
-            int n;
-            long total = 0;
-            while ((n = in.read(buf)) > 0) {
-                total += n;
-                if (total > MAX) throw new Exception("maior que 25 MB");
-                out.write(buf, 0, n);
-            }
-            return out.toByteArray();
-        }
     }
 }

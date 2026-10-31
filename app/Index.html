@@ -517,7 +517,7 @@ html.nativo .vp{max-width:none}
   <input type="file" id="arqIn" class="fileh" multiple accept="application/pdf,image/*,.csv,.ofx,.xlsx" onchange="enviarArquivos(this)" tabindex="-1" aria-hidden="true">
 </div>
 <script>
-window.FZ_VERSAO = 'v7.0';
+window.FZ_VERSAO = 'v7.1';
 window.FZ_API = '__FZ_API_URL__'; window.FZ_REPO = '__FZ_REPO__';
 window.__fzErros = [];
 window.addEventListener('error', function (ev) { window.__fzErros.push((ev.message || 'erro') + (ev.lineno ? ' (linha ' + ev.lineno + ')' : '')); });
@@ -828,6 +828,7 @@ function blocoHTML(b) {
     case 'Seg': return `<div class="sgw">${b.t ? `<div class="lbl" style="margin-top:4px">${e(b.t)}</div>` : ''}<div class="gl seg"><span class="ind" style="width:calc((100% - 8px) / ${b.items.length});transform:translateX(${Math.max(0, b.items.findIndex(m => m.on)) * 100}%)"></span>${b.items.map(m => `<button type="button" class="${m.on ? 'on' : ''}" onclick="${on(m.pick)}">${e(m.t)}</button>`).join('')}</div></div>`;
     case 'Inp': return `<div class="fi"><label class="lbl" for="${b.id}">${e(b.t)}</label><input id="${b.id}" class="inp ${b.cls || ''}" type="${b.type || 'text'}" placeholder="${e(b.ph || '')}" value="${e(b.val)}" inputmode="${b.im || 'text'}" oninput="${on(b.on)}"${b.onCh ? ` onchange="${on(b.onCh)}"` : ''}${b.min ? ` min="${b.min}"` : ''} autocomplete="off"></div>`;
     case 'Big': return `<div class="fi"><label class="lbl" for="${b.id}" style="margin-top:16px">${e(b.t)}</label><div class="bigw"><span>R$</span><input id="${b.id}" inputmode="decimal" placeholder="${e(b.ph || '0,00')}" value="${e(b.val)}" oninput="${on(b.on)}" autocomplete="off"></div></div>`;
+    case 'SwG': return `<div class="gl bk" style="padding:0 18px">${b.items.map((x, i) => `<button type="button" class="tgr" style="margin-top:0;height:62px;${i ? '' : 'border-top:0'}" onclick="${on(x.on)}" role="switch" aria-checked="${!!x.val}"><span><span style="display:block">${e(x.t)}</span>${x.sb ? `<span style="display:block;font-size:12px;font-weight:500;color:var(--t3);margin-top:2px">${e(x.sb)}</span>` : ''}</span><span class="swi ${x.val ? 'on' : ''}"><i></i></span></button>`).join('')}</div>`;
     case 'SwC': return `<div class="gl bk" style="padding:0 18px"><button type="button" class="tgr" style="margin-top:0;border-top:0;height:58px" onclick="${on(b.on)}" role="switch" aria-checked="${!!b.val}"><span><span style="display:block">${e(b.t)}</span>${b.sb ? `<span style="display:block;font-size:12px;font-weight:500;color:var(--t3);margin-top:2px">${e(b.sb)}</span>` : ''}</span><span class="swi ${b.val ? 'on' : ''}"><i></i></span></button></div>`;
     case 'Sw': return `<div class="tgw"><button type="button" class="tgr" onclick="${on(b.on)}" role="switch" aria-checked="${!!b.val}"><span>${e(b.t)}</span><span class="swi ${b.val ? 'on' : ''}"><i></i></span></button></div>`;
     case 'Mop': return `<div class="fi"><button type="button" class="mop ${b.val ? 'open' : ''}" onclick="${on(b.on)}" aria-expanded="${!!b.val}" style="margin-top:14px"><span>${e(b.t)}</span>${CHEV()}</button></div>`;
@@ -1972,12 +1973,15 @@ TELAS.ajustes = () => {
     bk('H', { t: 'Organização' }),
     bk('List', { items: [
       L('#8FE6FF', '#m-glo', 'Glossário', gl + ' termos' + (sug ? ' · ' + sug + ' a confirmar' : ''), '', '', () => abrirSub('glo', 'ajustes')),
-      L('#6FD3FF', '#m-mail', 'E-mails automáticos', AUTO ? (AUTO.erro ? 'autorize no editor do Apps Script' : AUTO.instalada ? 'ativos · tema do app' : 'desativados') : 'verificando…', '', '', () => abrirG('mails')),
+      L('#6FD3FF', '#m-mail', 'E-mails automáticos', !emailsOn() ? 'desligados em Aplicativo' : AUTO ? (AUTO.erro ? 'autorize no editor do Apps Script' : AUTO.instalada ? 'ativos · tema do app' : 'desativados') : 'verificando…', '', '', () => abrirG('mails')),
       L('#5FE0B0', '#m-bkp', 'Backup e rotinas', rot.backup ? 'último backup ' + String(rot.backup.quando || '').replace(/\/\d{4}/, '') : 'roda no domingo', '', '', () => abrirG('rotinas'))] }),
     bk('H', { t: 'Aplicativo' }),
     bk('List', { items: (NAT.app || NAT.simula ? [L('#8FE6FF', '#m-cel', 'App Android', 'versão ' + NAT.versao + (NAT.nova ? ' · nova ' + NAT.nova.versao + ' disponível' : ' · em dia'), NAT.nova ? 'nova' : '', '', () => abrirG('app'), { vcls: NAT.nova ? 'okb' : '' })] : [])
       .concat([L('#B9A6FF', '#m-qr', 'Conectar um celular', 'mostra o QR code para o app Android', '', '', () => { S.qr = null; S.qrErr = ''; abrirG('qr'); })]) }),
-    bk('SwC', { t: 'Vibrar ao tocar', sb: 'só neste aparelho', val: vibOn(), on: alternarVib }),
+    bk('SwG', { items: (NAT.app || NAT.simula ? [{ t: 'Notificações no celular', sb: 'vencimentos às 12h · avisos às 18h · limite na hora', val: notifOn(), on: alternarNotif }]
+        .concat(notifOn() ? [{ t: 'Lembrete de lançar o dia', sb: 'às 18h, se nada foi lançado', val: lembreteOn(), on: alternarLembrete }] : []) : [])
+      .concat([{ t: 'E-mails automáticos', sb: 'alertas e resumos também por e-mail', val: emailsOn(), on: alternarEmails },
+        { t: 'Vibrar ao tocar', sb: 'só neste aparelho', val: vibOn(), on: alternarVib }]) }),
     bk('H', { t: 'Ajuda' }),
     bk('List', { items: [L('#8FE6FF', '#m-como', 'Como funciona', 'o app explicado', '', '', () => abrirSub('como', 'ajustes'))] }),
     bk('Txt', { t: 'Referência: ' + AJ.dataRef + ' (mês ' + AJ.mesRef + ') · versão ' + window.FZ_VERSAO })
@@ -2314,6 +2318,7 @@ function salvarGasto() {
     const p = segundoPlano(() => call('salvarLancamento', o), null,
       (r) => { if (r && r.linha) { NOVOS64[r.linha] = 1; setTimeout(() => marcarNovo(r.linha), 900); } if (r && r.aprender) setTimeout(() => abrirG('lembrar', { a: r.aprender }), 700); return atualizarPainel(); },
       () => { S.f = Object.assign({}, f); abrirSheet('lancar'); });
+    if (!edit && o.tipo === 'Único' && o.data >= ((semInfo().sem[0] || {}).data || '9999')) natLimite(vTot - (numBR(o.terceiros) || 0));
     if (edit && orig) toast('Alterações salvas', () => segundoPlano(() => call('restaurarLancamentos', [orig]), 'Alteração desfeita', atualizarPainel));
     else toast('Gasto salvo', () => segundoPlano(async () => { const r = await p; if (r && r.linha) return call('restaurarLancamentos', [{ linha: r.linha, excluir: true }]); }, 'Lançamento desfeito', atualizarPainel));
   }, reduz() ? 0 : 450);
@@ -3135,7 +3140,7 @@ GS.descon = () => ({ tit: 'Desconectar?', sh: [
 ] });
 async function desconectarEste() {
   if (NAT.app) { try { await call('desconectarEste'); } catch (e) { console.warn(e); } }
-  limparLocal();
+  limparLocal(); natCred();
   NAT.conectado = false; NAT.con = { passo: 'inicio' }; set();
 }
 function limparLocal() {                       // apaga chave e cópias locais; mantém tema e vibração
@@ -3260,6 +3265,7 @@ async function conectarCodigo(texto, origem) {
   try {
     const r = await chamarApi('parear', [v, NAT.aparelho]);
     try { localStorage.setItem(CV + 'con', JSON.stringify(r)); } catch (e) {}
+    natCred();
     NAT.con = { passo: 'ok', planilha: r.planilha }; vib(20); set();
   } catch (e) {
     const m = String(e && e.message || e);
@@ -3343,7 +3349,7 @@ async function chamarApi(fn, args) {
   return j.r;
 }
 function perderConexao(msg) {
-  limparLocal(); NAT.conectado = false; NAT.con = { passo: 'inicio', err: msg }; set();
+  limparLocal(); natCred(); NAT.conectado = false; NAT.con = { passo: 'inicio', err: msg }; set();
 }
 
 // ---------- ponte nativa: chamada pelo lado Android (MainActivity / plugin Fz)
@@ -3368,7 +3374,117 @@ function natIniciar() {                        // chamada em iniciar(): no naveg
   if (navigator.onLine === false) setTimeout(() => mudarConexao(false), 400);
   setTimeout(fzRecebidos, 700);
   setTimeout(() => procurarAtualizacao(false), 3000);
+  natCred(); natAgenda();
+  if (p) setTimeout(() => p.destino().then(r => { if (r && r.dest) abrirDestino(r.dest); }).catch(() => {}), 900);
+  if (!PREF('notifPerguntado', false)) setTimeout(() => { if (!S.sheet && !notifOn()) { setPref('notifPerguntado', true); abrirG('notifGuia'); } }, 6000);
   return true;
+}
+
+// ================================================================== v7.1: notificações, widget e atalhos do ícone
+// Notificações: vencimentos por volta das 12h; assinatura, importação, resumo de domingo, revisão e o lembrete
+// por volta das 18h; limite de 80% e 100% da semana na hora em que um gasto lançado pelo app passa do ponto.
+// O widget atualiza quando o app sincroniza, às 18h e na virada do dia (0h).
+const PREF = (k, pad) => { try { const v = localStorage.getItem(CV + k); return v === null ? pad : v === '1'; } catch (e) { return pad; } };
+const setPref = (k, v) => { try { localStorage.setItem(CV + k, v ? '1' : '0'); } catch (e) {} };
+function notifOn() { return PREF('notif', false); }
+function lembreteOn() { return PREF('lembrete', false); }
+function emailsOn() { return !(AJ && AJ.cfg && AJ.cfg.emails === false); }
+function alternarNotif() {
+  if (!notifOn()) { natEstadoGuia().then(() => abrirG('notifGuia')); return; }
+  setPref('notif', false); vib(8); set(); toast('Notificações desligadas');
+  natAgenda();
+}
+function alternarLembrete() { const v = !lembreteOn(); setPref('lembrete', v); vib(8); set(); toast(v ? 'Lembrete ligado: às 18h, se nada foi lançado' : 'Lembrete desligado'); natAgenda(); }
+function alternarEmails() {
+  const v = !emailsOn(); vib(8);
+  if (AJ) { AJ.cfg = Object.assign({}, AJ.cfg || {}, { emails: v }); gravarCache('ajustes', AJ); }
+  set();
+  segundoPlano(() => call('salvarPreferencias', { emails: v }), v ? 'E-mails automáticos ligados' : 'E-mails automáticos desligados');
+}
+// guia de primeira vez: permissão do Android e os dois ajustes do HyperOS para o app rodar às 12h e às 18h
+NAT.guia = { perm: false, auto: false, bat: false };
+GS.notifGuia = () => {
+  const g = NAT.guia, ok = g.perm && g.auto && g.bat;
+  const passo = (feito, nome, sb, fn) => L(feito ? '#5FE0B0' : '#8FE6FF', feito ? '#i-check' : '#m-cel', nome, sb, feito ? 'feito' : 'abrir', '', feito ? null : fn, { vcls: feito ? 'okb' : '' });
+  return { tit: 'Avisos no celular', sh: [
+    bk('Txt', { t: 'O HyperOS fecha apps que rodam em segundo plano. Faça estes três ajustes uma vez para os avisos chegarem na hora.' }),
+    bk('List', { items: [
+      passo(g.perm, 'Permitir notificações', 'o Android pergunta uma vez', () => natPedir('perm')),
+      passo(g.auto, 'Início automático', 'Configurações › Apps › Finansovr', () => natPedir('auto')),
+      passo(g.bat, 'Bateria sem restrições', 'Economia de bateria › Sem restrições', () => natPedir('bat'))] }),
+    bk('Pv', { cls: ok ? 'ok' : 'neu', t: ok ? 'Tudo pronto. Vencimentos chegam por volta das 12h, os outros avisos por volta das 18h e o limite da semana na hora.' : 'Toque em cada item: o app abre a tela certa das configurações e você volta para cá.' }),
+    bk('Btn', { t: 'Ligar notificações', dis: !g.perm, a: () => { setPref('notif', true); natAgenda(); okJanela('Notificações ligadas'); } }),
+    bk('Btn2', { t: 'Enviar uma notificação de teste', dis: !g.perm, a: () => natNotificar({ tipo: 'teste', tit: 'Notificações do Finansovr', txt: 'É assim que os avisos vão chegar.', acao: 'Abrir o app', dest: 'painel' }) })
+  ] };
+};
+async function natEstadoGuia() {           // no APK, o guia começa com o que já está liberado
+  const p = FZP(); if (!(NAT.app && p)) return;
+  try { const r = await p.permissao({ tipo: 'estado' }); NAT.guia.perm = !!r.perm; NAT.guia.bat = !!r.bat; NAT.guia.auto = NAT.guia.auto || PREF('autoFeito', false); } catch (e) {}
+}
+async function natPedir(k) {
+  const p = FZP();
+  if (NAT.app && p) { try { const r = await p.permissao({ tipo: k }); NAT.guia[k] = !!(r && r.ok); if (k === 'auto' && NAT.guia[k]) setPref('autoFeito', true); } catch (e) { NAT.guia[k] = false; } }
+  else if (NAT.ponte.permissao) NAT.guia[k] = await NAT.ponte.permissao(k);
+  set();
+}
+// abre o app na tela certa (toque na notificação, no botão dela, no widget ou nos atalhos do ícone)
+function abrirDestino(dest) {
+  const [k, arg] = String(dest || 'painel').split(':');
+  const fechar = () => { if (S.sheet) fecharSheet(); if (S.fan) fecharFan(); };
+  fechar();
+  const t = reduz() ? 0 : 300;
+  setTimeout(() => {
+    if (k === 'semana') go('semana');
+    else if (k === 'venc' || k === 'imp' || k === 'pend' || k === 'rev') abrirSub(k);
+    else if (k === 'resumo') { go('painel'); setTimeout(() => abrirResumo(''), 250); }
+    else if (k === 'lancar') { const at = atalhosLista(), q = arg ? at.find(a => a.cat === arg) : null; abrirLancar(q ? { atalho: q } : undefined); }
+    else if (k === 'importar') { go('mais'); setTimeout(() => abrirSub('imp'), 200); if (NAT.app && FZP()) FZP().escolherArquivos().then(r => { if (r && r.arqs && r.arqs.length) receberArquivos(r.arqs); }).catch(() => {}); else if (NAT.ponte.escolherArquivos) NAT.ponte.escolherArquivos(); }
+    else go('painel');
+  }, S.sheet ? t : 0);
+}
+window.fzAbrir = abrirDestino;
+// notificação (no APK, pelo plugin nativo; no protótipo, pela ponte simulada)
+function natNotificar(n) {
+  if (n.tipo !== 'teste' && !notifOn()) return;
+  const p = FZP();
+  if (NAT.app && p) p.notificar(n).catch(() => {});
+  else if (NAT.ponte.notificar) NAT.ponte.notificar(n);
+}
+// limite da semana: na hora em que um gasto lançado pelo app passa de 80% ou de 100%
+function natLimite(valor) {
+  const s = semInfo(); if (!(s.lim > 0)) return;
+  const antes = s.cons, depois = s.cons + (Number(valor) || 0), ini = (s.sem[0] && s.sem[0].data) || hojeIso();
+  const nivel = depois >= s.lim ? 100 : depois >= 0.8 * s.lim ? 80 : 0;
+  const ja = (() => { try { return Number(localStorage.getItem(CV + 'lim_' + ini) || 0); } catch (e) { return 0; } })();
+  if (!nivel || nivel <= ja || antes >= (nivel === 100 ? s.lim : 0.8 * s.lim)) return;
+  try { localStorage.setItem(CV + 'lim_' + ini, String(nivel)); } catch (e) {}
+  natNotificar(nivel === 100
+    ? { tipo: 'limite', tit: 'Orçamento da semana estourado', txt: fm(depois) + ' de ' + fm(s.lim) + ': passou ' + fm(depois - s.lim) + '.', acao: 'Ver semana', dest: 'semana' }
+    : { tipo: 'limite', tit: 'Você já usou 80% da semana', txt: fm(depois) + ' de ' + fm(s.lim) + '. Restam ' + fm(s.lim - depois) + ' até domingo.', acao: 'Ver semana', dest: 'semana' });
+}
+// resumo para o widget (o app grava a cada sincronização; o lado nativo lê às 18h e na virada do dia)
+function natWidget() {
+  if (!DADOS) return null;
+  const h = DADOS.hoje || {}, s = semInfo(), at = atalhosLista().slice(0, 3);
+  const pode = typeof h.podeHojeNum === 'number' ? h.podeHojeNum : nTxt(h.podeHoje), gasto = nTxt(h.gastoHoje), lim = nTxt(h.limiteHoje);
+  const w = { pode, gasto, lim, semana: s.rest, livre: nTxt(h.livreMes), oculto: !!S.hide, dentro: pode >= -0.004,
+    atalhos: at.map(q => { const a = icDe(q.cat); return { cat: q.cat, nome: curto(q.cat), cor: a[1], ic: a[0] }; }), quando: String(DADOS.atualizado || '').slice(-5) };
+  const p = FZP(); if (NAT.app && p) p.widget({ dados: w }).catch(() => {});
+  if (NAT.ponte.widget) NAT.ponte.widget(w);
+  return w;
+}
+// avisa o lado nativo das escolhas (para o agendamento das 12h, 18h e 0h)
+function natAgenda() {
+  const o = { notif: notifOn(), lembrete: lembreteOn() };
+  const p = FZP(); if (NAT.app && p) p.agenda(o).catch(() => {});
+  if (NAT.ponte.agenda) NAT.ponte.agenda(o);
+}
+
+// o lado nativo precisa do endereço da API e da chave deste celular para conferir às 12h, 18h e 0h com o app fechado
+function natCred() {
+  const p = FZP(); if (!(NAT.app && p)) return;
+  const c = lerCred();
+  p.credenciais(c ? { api: FZ_API, id: c.id, chave: c.chave } : {}).catch(() => {});
 }
 
 // ------------------------------------------------ sincronização, tema, navegação, gestos e início
@@ -3403,6 +3519,7 @@ function aplicarTudo(t) {
   if (t.vencimentos) { gravarCache('venc', t.vencimentos); }
   S.plano = {};
   set();
+  clearTimeout(NAT.wt); NAT.wt = setTimeout(natWidget, 300);
 }
 let syncPendente = 0;
 function atualizarPainel() {
@@ -3438,7 +3555,7 @@ function mostrarFalha(e) { set({ falha: String(e && e.message || e || 'erro desc
 
 // ---------- valores escondidos (segure em qualquer lugar para ver por 3 s)
 S.hide = (() => { try { return localStorage.getItem(CV + 'oculto') === '1'; } catch (e) { return false; } })();
-function alternarOculto() { vib(6); S.hide = !S.hide; S.peek = false; try { localStorage.setItem(CV + 'oculto', S.hide ? '1' : '0'); } catch (e) {} set(); }
+function alternarOculto() { vib(6); S.hide = !S.hide; S.peek = false; try { localStorage.setItem(CV + 'oculto', S.hide ? '1' : '0'); } catch (e) {} set(); natWidget(); }
 const PK = { t: 0, x: 0, y: 0 };
 function peekDown(e) {
   if (!S.hide || (e.target.closest && e.target.closest('.add,[data-sw],input,.chart'))) return;

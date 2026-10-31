@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="wd_medio">Finansovr</string>
+    <string name="wd_medio_desc">Pode gastar hoje, semana, livre no mês e lançamento rápido</string>
+    <string name="wd_pequeno">Finansovr · hoje</string>
+    <string name="wd_pequeno_desc">Quanto ainda pode gastar hoje</string>
+</resources>
