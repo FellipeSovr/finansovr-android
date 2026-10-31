@@ -433,6 +433,10 @@ body{overflow:hidden;-webkit-tap-highlight-color:transparent;-webkit-text-size-a
 .qrvid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.92}
 html.nativo .vp{max-width:none}
 
+/* v7.2.0: lançamento indo para a planilha */
+.pdg{font-weight:700}.pdg.env{color:#8FE6FF}.pdg.esp{color:#FFC85C}
+.claro .pdg.env{color:#1D7FC4}.claro .pdg.esp{color:#9A6A00}
+
 </style>
 </head>
 <body>
@@ -517,7 +521,7 @@ html.nativo .vp{max-width:none}
   <input type="file" id="arqIn" class="fileh" multiple accept="application/pdf,image/*,.csv,.ofx,.xlsx" onchange="enviarArquivos(this)" tabindex="-1" aria-hidden="true">
 </div>
 <script>
-window.FZ_VERSAO = 'v7.1';
+window.FZ_VERSAO = 'v7.2.0';
 window.FZ_API = '__FZ_API_URL__'; window.FZ_REPO = '__FZ_REPO__';
 window.__fzErros = [];
 window.addEventListener('error', function (ev) { window.__fzErros.push((ev.message || 'erro') + (ev.lineno ? ' (linha ' + ev.lineno + ')' : '')); });
@@ -613,9 +617,10 @@ function expMov(r){
 }
 const MOVX = {};                                       // itens expandidos por chave
 async function movimento(m, voltar, render){
-  const k = 'mov:' + m + ':' + voltar;
-  return viaCache(k, () => call('getMovimento', m, voltar), (r) => {
-    const it = expMov(r); MOVX[k] = {r, it};
+  const k = 'mov:' + m + ':' + voltar, t0 = Date.now();
+  return viaCache(k, () => call('getMovimento', m, voltar), (r, doCache) => {
+    if (!doCache && typeof RAP !== 'undefined' && RAP.ultEscrita > t0) { delete MEM[k]; try { localStorage.removeItem(CV + k); } catch (e) {} return; }   // v7.2.0: chegou depois de uma gravação: vale a próxima leitura
+    const it = expMov(r).filter(x => !(typeof RAP !== 'undefined' && RAP.tirando[x.linha])); MOVX[k] = {r, it};
     it.forEach(x => { if (!x.arquivado) { const i = LANCS.findIndex(l => l.linha === x.linha); if (i >= 0) LANCS[i] = Object.assign({}, LANCS[i], x); else LANCS.push(x); } });
     if (render) render(it, r);
   });
@@ -1439,7 +1444,7 @@ function listaDados() {
 function itemLista(x, m) {
   const aberto = S.swOpen === x.linha, xx = aberto ? -96 : 0, a = icDe(x.cat), ign = !ativoX(x);
   const corpo = `${icSpan(a[1], ih(a[0]), 40, 14, 21, 1.7)}
-                  <div style="flex:1;min-width:0"><div class="nm"${ign ? ' style="text-decoration:line-through"' : ''}>${esc(x.desc)}</div><div class="sb">${sbLancH(x, m)}</div></div>
+                  <div style="flex:1;min-width:0"><div class="nm"${ign ? ' style="text-decoration:line-through"' : ''}>${esc(x.desc)}</div><div class="sb">${x.pend ? `<span class="pdg ${x.pend}" data-k="pd${x.pend}">${x.pend === 'esp' ? 'aguardando a planilha' : 'enviando…'}</span> · ` : ''}${sbLancH(x, m)}</div></div>
                   <div class="vl">${fm(x.suaParte)}</div>`;
   if (x.arquivado) return `<div class="swr" data-k="l${x.linha}a"><div class="it" style="opacity:.6" role="button" tabindex="0" onclick="${on(() => verArquivadoMov(x.linha))}">${corpo}</div></div>`;
   return `<div class="swr" data-k="l${x.linha}">
@@ -2315,26 +2320,26 @@ function salvarGasto() {
   set({ saveOk: true });
   setTimeout(() => {
     set({ saveOk: false }); fecharSheet(); vib(15);
-    const p = segundoPlano(() => call('salvarLancamento', o), null,
+    const p = segundoPlano(gasto('salvarLancamento', o), null,
       (r) => { if (r && r.linha) { NOVOS64[r.linha] = 1; setTimeout(() => marcarNovo(r.linha), 900); } if (r && r.aprender) setTimeout(() => abrirG('lembrar', { a: r.aprender }), 700); return atualizarPainel(); },
       () => { S.f = Object.assign({}, f); abrirSheet('lancar'); });
     if (!edit && o.tipo === 'Único' && o.data >= ((semInfo().sem[0] || {}).data || '9999')) natLimite(vTot - (numBR(o.terceiros) || 0));
-    if (edit && orig) toast('Alterações salvas', () => segundoPlano(() => call('restaurarLancamentos', [orig]), 'Alteração desfeita', atualizarPainel));
-    else toast('Gasto salvo', () => segundoPlano(async () => { const r = await p; if (r && r.linha) return call('restaurarLancamentos', [{ linha: r.linha, excluir: true }]); }, 'Lançamento desfeito', atualizarPainel));
+    if (edit && orig) toast('Alterações salvas', () => segundoPlano(gasto('restaurarLancamentos', [orig]), 'Alteração desfeita', atualizarPainel));
+    else toast('Gasto salvo', () => segundoPlano(async () => { const r = await p; if (r && r.linha) return callGasto('restaurarLancamentos', [{ linha: r.linha, excluir: true }]); }, 'Lançamento desfeito', atualizarPainel));
   }, reduz() ? 0 : 450);
 }
 function excluirRapido(l) {
   const x = acharLanc(l) || {}; const orig = copiaLanc(x); orig.linha = l;
   tirarLocal(l); vib(18); set({ swOpen: null });
-  segundoPlano(() => call('excluirLancamento', l), null, atualizarPainel);
-  toast('Lançamento excluído', () => segundoPlano(() => call('restaurarLancamentos', [orig]), 'Lançamento de volta', atualizarPainel));
+  segundoPlano(gasto('excluirLancamento', l), null, atualizarPainel);
+  toast('Lançamento excluído', () => segundoPlano(gasto('restaurarLancamentos', [orig]), 'Lançamento de volta', atualizarPainel));
 }
 function duplicarHoje(l) {
   const x = acharLanc(l); if (!x) return;
   vib(12);
   const o = { desc: x.desc, valor: br(x.valor), data: hojeIso(), cat: x.cat, meio: x.meio, cartao: x.cartao, tipo: 'Único', terceiros: x.terceiros === '' ? '' : br(x.terceiros) };
-  const p = segundoPlano(() => call('salvarLancamento', o), null, (r) => { if (r && r.linha) setTimeout(() => marcarNovo(r.linha), 900); return atualizarPainel(); });
-  toast('Duplicado com a data de hoje', () => segundoPlano(async () => { const r = await p; if (r && r.linha) return call('restaurarLancamentos', [{ linha: r.linha, excluir: true }]); }, 'Duplicação desfeita', atualizarPainel));
+  const p = segundoPlano(gasto('salvarLancamento', o), null, (r) => { if (r && r.linha) setTimeout(() => marcarNovo(r.linha), 900); return atualizarPainel(); });
+  toast('Duplicado com a data de hoje', () => segundoPlano(async () => { const r = await p; if (r && r.linha) return callGasto('restaurarLancamentos', [{ linha: r.linha, excluir: true }]); }, 'Duplicação desfeita', atualizarPainel));
 }
 
 // ------------------------------------------------ leque do + (segure e solte sobre um gasto frequente)
@@ -2358,8 +2363,8 @@ function lancarAtalho(i) {
   const x = fanItens()[i]; if (!x) return;
   vib(15);
   const o = { desc: curto(x.cat), valor: br(Number(x.tipico).toFixed(2)), data: hojeIso(), cat: x.cat, meio: x.meio, cartao: x.cartao, tipo: 'Único' };
-  const p = segundoPlano(() => call('salvarLancamento', o), null, (r) => { if (r && r.linha) setTimeout(() => marcarNovo(r.linha), 900); return atualizarPainel(); });
-  toast(curto(x.cat) + ' · gasto salvo', () => segundoPlano(async () => { const r = await p; if (r && r.linha) return call('restaurarLancamentos', [{ linha: r.linha, excluir: true }]); }, 'Lançamento desfeito', atualizarPainel));
+  const p = segundoPlano(gasto('salvarLancamento', o), null, (r) => { if (r && r.linha) setTimeout(() => marcarNovo(r.linha), 900); return atualizarPainel(); });
+  toast(curto(x.cat) + ' · gasto salvo', () => segundoPlano(async () => { const r = await p; if (r && r.linha) return callGasto('restaurarLancamentos', [{ linha: r.linha, excluir: true }]); }, 'Lançamento desfeito', atualizarPainel));
 }
 function fanHTML() {
   if (!S.fan) return '';
@@ -2858,10 +2863,34 @@ GS.rotinas = () => {
     bk('Rows', { items: [{ k: 'Último backup', v: b.v, cls: b.cls }].concat(r.backup && !r.backup.ok && r.backupOk ? [{ k: 'Último backup que deu certo', v: String(r.backupOk.quando || ''), cls: 'pos' }] : []).concat([{ k: 'Diagnóstico semanal', v: d.v, cls: d.cls }, { k: 'Arquivo', v: a.v, cls: a.cls }]) }),
     r.diag && r.diag.msg ? ESTX('Diagnóstico: ' + r.diag.msg) : null,
     bk('Btn', { t: 'Fazer backup agora', a: () => { okJanela(); toast('Fazendo a cópia: pode levar até 1 minuto'); acao(() => call('fazerBackup'), 'Backup criado no Drive', (x) => { if (AJ) AJ.rotinas = x.rotinas; invalidar('ajustes'); set(); }); } }),
-    bk('Btn2', { t: 'Rodar diagnóstico', a: () => { okJanela(); acao(() => call('rodarDiagnostico'), null, (x) => { if (AJ) AJ.rotinas = x.rotinas; invalidar('ajustes'); set(); if (x.ok) toast('Diagnóstico: tudo certo'); else setTimeout(() => abrirG('diag', { r: x }), 300); sincronizar(); }); } })
+    bk('Btn2', { t: 'Rodar diagnóstico', a: () => { okJanela(); acao(() => call('rodarDiagnostico'), null, (x) => { if (AJ) AJ.rotinas = x.rotinas; invalidar('ajustes'); set(); setTimeout(() => abrirG('diag', { r: x }), 300); sincronizar(); }); } })
   ] };
 };
-GS.diag = (p) => ({ tit: 'Diagnóstico', sh: [bk('H', { t: p.r.avisos.length + (p.r.avisos.length === 1 ? ' aviso' : ' avisos') })].concat(p.r.avisos.map(a => bk('Pv', { cls: 'bad', t: a })), [bk('Btn', { t: 'Fechar', a: fecharSheet })]) });
+// v7.2.0: o diagnóstico mostra também o tempo de cada parte, as medições anteriores e os erros registrados
+GS.diag = (p) => {
+  const r = p.r, m = r.medicao, sh = [];
+  sh.push(bk('H', { t: r.avisos.length ? r.avisos.length + (r.avisos.length === 1 ? ' aviso' : ' avisos') : 'Tudo certo' }));
+  r.avisos.forEach(a => sh.push(bk('Pv', { cls: 'bad', t: a })));
+  if (m) {
+    sh.push(bk('H', { t: 'Tempo de cada parte' }));
+    sh.push(bk('Rows', { items: [{ k: 'Recálculo da planilha', v: segTxt(m.recalculo) }, { k: 'Leitura dos lançamentos', v: segTxt(m.lancamentos) },
+      { k: 'Montagem do Painel', v: segTxt(m.painel) }, { k: 'Dados completos do app', v: segTxt(m.tudo) },
+      { k: 'Linhas em uso', v: (m.linhasUsadas || 0) + ' de ' + (m.linhasArea || 0) }] }));
+  }
+  const cel = temposCelular();
+  if (cel.length) { sh.push(bk('H', { t: 'Neste celular' })); sh.push(bk('Rows', { items: cel })); }
+  const ant = (r.medicoes || []).slice(1, 6);
+  if (ant.length) { sh.push(bk('H', { t: 'Medições anteriores' })); sh.push(bk('Rows', { items: ant.map(x => ({ k: x.quando, v: 'recálculo ' + segTxt(x.recalculo) + ' · dados ' + segTxt(x.tudo) })) })); }
+  const er = r.erros;
+  if (er) {
+    sh.push(bk('H', { t: 'Erros registrados' }));
+    sh.push(bk('Rows', { items: [{ k: 'Últimos 7 dias', v: String(er.semana), cls: er.semana ? 'neg' : 'pos' }] }));
+    (er.ultimos || []).forEach(x => sh.push(ESTX(x.quando + ' · ' + x.onde + ': ' + x.msg)));
+    if (er.semana) sh.push(ESTX('A lista completa fica na aba Erros da planilha.'));
+  }
+  sh.push(bk('Btn', { t: 'Fechar', a: fecharSheet }));
+  return { tit: 'Diagnóstico', sh };
+};
 GS.copiar = () => ({ tit: 'Copie o comando', sh: [bInp('cpC', 'Comando', CMD), ESTX('Toque no campo, copie e cole numa conversa com o Claude.'), bk('Btn', { t: 'Fechar', a: fecharSheet })] });
 // ---------- pendências: uma janela por decisão
 GS.pAss = (p) => {
@@ -2955,6 +2984,166 @@ GS.arqItem = (p) => { const x = p.x, r = (k, v) => v === '' || v == null ? null 
   bk('Rows', { items: [r('Valor', fm(x.valor)), r('Data da compra', x.data ? dBr(x.data) + '/' + x.data.slice(0, 4) : ''), r('Categoria', x.cat), r('Meio', x.meio + (x.cartao ? ' · ' + semCart(x.cartao) : '')), x.tipo === 'Parcelado' ? r('Parcelas', x.parcAtual + ' de ' + x.parcTotal) : r('Tipo', x.tipo), r('Parte de terceiros', x.terceiros ? fm(x.terceiros) : ''), r('Situação', x.status), r('Observação', x.obs), r('Arquivado em', x.arquivadoEm ? dBr(x.arquivadoEm) + '/' + x.arquivadoEm.slice(0, 4) : '')].filter(Boolean) }),
   ESTX('Arquivados não podem ser editados. Para corrigir, use a aba Arquivo da planilha.'),
   bk('Btn', { t: 'Fechar', a: fecharSheet })] }; };
+
+// ------------------------------------------------ v7.2.0: velocidade e robustez
+// Gasto novo, edição, exclusão, duplicar e desfazer passam por gasto(): o item aparece na lista na hora ("enviando…"),
+// o envio leva uma etiqueta única (reenviar não duplica) e a resposta já traz o Painel e o item como ficaram na planilha.
+// Planilha ocupada: o app espera e tenta de novo a cada minuto. Erros vão para a aba "Erros" da planilha.
+
+// ---------- cópias locais de outro formato são descartadas (dados) — preferências, conexão e filtros ficam
+const FMT_LOCAL = '72';
+(function () {
+  try {
+    if (localStorage.getItem(CV + 'fmt') === FMT_LOCAL) return;
+    Object.keys(localStorage).forEach(k => {
+      if (k.indexOf(CV) !== 0) return;
+      const n = k.slice(CV.length);
+      if (/^(tudo|tok|lista|pend|venc|sim|orc|ana|rendas|ajustes|glo|cat|rel|arq|mov:|cal:|reemb:|rev:)/.test(n)) localStorage.removeItem(k);
+    });
+    localStorage.setItem(CV + 'fmt', FMT_LOCAL);
+  } catch (e) {}
+})();
+
+// ---------- chamada com opções: etiqueta, extras (item, painel) e resposta completa
+const dormir = (ms) => new Promise(r => setTimeout(r, ms));
+const novaEtq = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+function chamarX(fn, args, op) {
+  if (typeof NAT !== 'undefined' && NAT.app) return chamarApi(fn, args, op);
+  return Servidor.chamar(fn, args).then(r => ({ r }));          // tela web: sem extras (o app atualiza depois, como antes)
+}
+const RAP = { tirando: {}, esp: 0, avisou: 0, ultEscrita: 0, tempos: null, salvar: null, espera: 60000 };
+async function enviar(fn, args, extra, linhaLocal) {
+  const etq = novaEtq(); let tent = 0;
+  for (;;) {
+    const t0 = Date.now();
+    try {
+      const env = await chamarX(fn, args, { etq, extra, tent });
+      RAP.ultEscrita = Date.now();
+      RAP.salvar = { fn, total: Date.now() - t0, servidor: env.ms != null ? env.ms : null, tempos: env.tempos || null, quando: Date.now() };
+      if (tent && RAP.esp) { RAP.esp--; set(); }
+      return env;
+    } catch (e) {
+      tent++;
+      if (e && e.ocupada && tent <= 15) {                         // uma importação ou rotina está gravando: tenta de novo em 1 min
+        if (tent === 1) { RAP.esp++; if (Date.now() - RAP.avisou > 30000) { RAP.avisou = Date.now(); toast('Planilha ocupada: tento de novo a cada minuto'); } }
+        if (linhaLocal) marcarLocal(linhaLocal, { pend: 'esp' }); set();
+        await dormir(RAP.espera);
+        if (linhaLocal) marcarLocal(linhaLocal, { pend: 'env' }); set();
+        continue;
+      }
+      if (tent > 1 && RAP.esp && (!e || !e.ocupada)) { RAP.esp--; set(); }
+      if (e && e.tempo && tent <= 2) { await dormir(2500); continue; }   // não respondeu: reenvia (a etiqueta evita duplicar)
+      throw e;
+    }
+  }
+}
+
+// ---------- itens locais nas listas
+function itemLocal(o, linha, pend) {
+  const v = numBR(o.valor) || 0, t = numBR(o.terceiros) || 0, m = String(o.data || hojeIso()).slice(0, 7);
+  return { linha, data: o.data, desc: o.desc, cat: o.cat, meio: o.meio, cartao: o.cartao || '', tipo: o.tipo || 'Único', valor: v, parcAtual: o.parcAtual || '', parcTotal: o.parcTotal || '',
+    terceiros: o.terceiros === '' || o.terceiros === undefined ? '' : t, mesFatura: o.mesFatura || '', recAte: o.recAte || '', recorrencia: o.recorrencia || '', status: o.status || 'Ativo', origem: 'App', ref: '', obs: o.obs || '',
+    mesIni: m, mesFim: o.tipo === 'Parcelado' ? addMes(m, (Number(o.parcTotal) || 1) - (Number(o.parcAtual) || 1)) : o.tipo === 'Recorrente' ? (o.recAte || addMes(m, 120)) : m,
+    mesConsiderado: m, valorCons: v, suaParte: v - t, reservada: false, alerta: '', id: '', mesCobranca: '', arquivado: false, pend };
+}
+function porNaLista(x) {
+  if (!LANCS.some(y => y.linha === x.linha)) LANCS.push(x);
+  Object.values(MOVX).forEach(mv => { const r = mv.r; if (x.mesIni <= r.mes && (x.mesFim || x.mesIni) >= r.ini && !mv.it.some(y => y.linha === x.linha)) mv.it.push(x); });
+}
+function marcarLocal(l, campos) {
+  [LANCS].concat(Object.values(MOVX).map(v => v.it)).forEach(arr => arr.forEach(y => { if (y.linha === l) Object.assign(y, campos); }));
+}
+function trocarItem(l, novo) { tirarLocal(l); porNaLista(Object.assign(novo, { pend: '' })); }
+
+// ---------- envio de gastos: gasto(fn, ...args) já mostra o resultado e devolve a função que envia (para segundoPlano)
+const VOO = {}, VOO_FORA = {};                                          // linha provisória (negativa) → promessa da linha real
+let TMP = -1;
+function gasto(fn, ...args) {
+  const o = args[0] || {}, novo = fn === 'salvarLancamento' && !o.linha, ed = fn === 'salvarLancamento' && Number(o.linha) > 0;
+  let tmp = 0, fim = null;
+  if (novo) { tmp = TMP--; porNaLista(itemLocal(o, tmp, 'env')); VOO[tmp] = new Promise(r => { fim = r; }); set(); }
+  else if (ed) marcarLocal(Number(o.linha), { pend: 'env' });
+  else if (fn === 'excluirLancamento' && Number(args[0]) < 0) VOO_FORA[Number(args[0])] = 1;
+  else if (fn === 'restaurarLancamentos' && Array.isArray(o)) o.forEach(x => { const l = Number(x.linha); if (!(l > 0)) return; tirarLocal(l); if (!x.excluir) porNaLista(itemLocal(x, l, 'env')); });
+  return async () => {
+    // lançamento que ainda está indo para a planilha: espera a linha real
+    if (fn === 'salvarLancamento' && Number(o.linha) < 0) { const l = await VOO[Number(o.linha)]; if (!l) throw new Error('o lançamento não chegou à planilha'); args[0] = Object.assign({}, o, { linha: l }); }
+    if (fn === 'excluirLancamento' && Number(args[0]) < 0) { const l = await VOO[Number(args[0])]; if (!l) return { ok: true }; args[0] = l; }
+    if (fn === 'restaurarLancamentos' && Array.isArray(args[0])) {
+      args[0] = (await Promise.all(args[0].map(async x => Number(x.linha) < 0 ? Object.assign({}, x, { linha: await VOO[Number(x.linha)] }) : x))).filter(x => x.linha);
+      if (!args[0].length) return { ok: true };
+    }
+    const fora = fn === 'excluirLancamento' ? [Number(args[0])] : fn === 'restaurarLancamentos' ? args[0].filter(x => x.excluir).map(x => Number(x.linha)) : [];
+    fora.forEach(l => { RAP.tirando[l] = (RAP.tirando[l] || 0) + 1; });      // leituras que chegarem antes do fim não trazem de volta
+    const solta = () => fora.forEach(l => { if (!--RAP.tirando[l]) delete RAP.tirando[l]; });
+    const alvo = ed ? Number(o.linha) : Number(args[0] && args[0].linha) > 0 ? Number(args[0].linha) : 0;
+    try {
+      const env = await enviar(fn, args, fn === 'salvarLancamento' ? ['item', 'painel'] : ['painel'], tmp || alvo);
+      const r = env.r;
+      if (env.dados) { DADOS = env.dados; S.falha = ''; clearTimeout(NAT.wt); NAT.wt = setTimeout(natWidget, 300); }
+      const it = env.item ? expMov({ itens: [env.item] })[0] : null;
+      if (novo) { const l = r && r.linha; fim(l || 0); if (VOO_FORA[tmp]) tirarLocal(tmp); else if (it) trocarItem(tmp, it); else if (l) marcarLocal(tmp, { linha: l, pend: '' }); else tirarLocal(tmp); }
+      else if (fn === 'salvarLancamento') { const l = Number(args[0].linha); if (it) trocarItem(l, it); else marcarLocal(l, { pend: '' }); }
+      else if (fn === 'restaurarLancamentos') args[0].forEach(x => { if (!x.excluir) marcarLocal(Number(x.linha), { pend: '' }); });
+      fora.forEach(tirarLocal); solta();
+      set(); return r;
+    } catch (e) {
+      if (novo) { fim(0); tirarLocal(tmp); } else if (ed) marcarLocal(Number(o.linha), { pend: '' });
+      else if (fn === 'restaurarLancamentos' && Array.isArray(args[0])) args[0].forEach(x => marcarLocal(Number(x.linha), { pend: '' }));
+      solta();
+      set(); throw e;
+    }
+  };
+}
+const callGasto = (fn, ...args) => gasto(fn, ...args)();
+
+// ---------- registro de erros do app (vai em lote para a aba Erros)
+const ERRQ = { l: [], vistos: {}, t: 0 };
+function registrarErroApp(onde, e) {
+  const msg = String(e && e.message ? e.message : e || '');
+  if (!msg || (e && (e.semRede || e.ocupada)) || /Sem internet|não respondeu|Este celular não está conectado/.test(msg)) return;
+  const k = onde + '|' + msg; if (ERRQ.vistos[k]) return; ERRQ.vistos[k] = 1;
+  const cred = typeof lerCred === 'function' ? lerCred() : null;
+  ERRQ.l.push({ onde: String(onde || ''), msg: msg.slice(0, 500), det: String(e && e.stack || '').slice(0, 600), v: (window.FZ_VERSAO || '') + (typeof NAT !== 'undefined' && NAT.app ? ' · APK ' + (NAT.versao || '') : ' · web'), id: cred ? cred.id : '' });
+  clearTimeout(ERRQ.t); ERRQ.t = setTimeout(enviarErros, 4000);
+}
+function enviarErros() {
+  if (!ERRQ.l.length || (typeof NAT !== 'undefined' && NAT.off)) return;
+  const lote = ERRQ.l.splice(0, 20);
+  Servidor.chamar('registrarErros', [lote]).catch(() => {});
+}
+window.addEventListener('error', (ev) => registrarErroApp('tela', ev.error || ev.message));
+window.addEventListener('unhandledrejection', (ev) => registrarErroApp('tela (promessa)', ev.reason));
+
+// ---------- telas do Mais pré-carregadas (uma ida só, depois que o app abriu)
+let preMaisFeito = 0;
+function preCarregarMais(forcar) {
+  if (typeof NAT !== 'undefined' && (NAT.off || (NAT.app && !NAT.conectado))) return;
+  if (!forcar && Date.now() - preMaisFeito < 10 * 60000) return;
+  preMaisFeito = Date.now();
+  call('getMaisLote').then(x => {
+    if (!x) return;
+    const g = { orc: v => { ORCD = v; }, venc: v => { VENCD = v; }, rendas: v => { RENDAS = v; }, ajustes: v => { AJ = v; }, sim: v => { SIMD = v; }, ana: v => { ANA = v; } };
+    Object.keys(g).forEach(k => { if (x[k] != null) { gravarCache(k, x[k]); g[k](x[k]); } });
+    set();
+  }).catch(() => { preMaisFeito = 0; });
+}
+
+// ---------- diagnóstico: tempo de cada parte
+const segTxt = (ms) => ms == null ? '–' : (ms < 1000 ? ms + ' ms' : (ms / 1000).toFixed(1).replace('.', ',') + ' s');
+function temposCelular() {
+  const it = [], s = RAP.tempos, w = RAP.salvar;
+  if (s) {
+    it.push({ k: 'Última atualização', v: segTxt(s.total) + (s.igual ? ' · nada mudou' : s.cache ? ' · da cópia do servidor' : '') });
+    if (s.servidor != null) it.push({ k: '· no servidor', v: segTxt(s.servidor) }, { k: '· rede e abertura', v: segTxt(Math.max(0, s.total - s.servidor)) });
+    if (s.painel != null) it.push({ k: '· Painel na tela em', v: segTxt(s.painel) });
+  }
+  if (w) {
+    it.push({ k: 'Último envio', v: segTxt(w.total) });
+    if (w.servidor != null) it.push({ k: '· no servidor', v: segTxt(w.servidor) });
+  }
+  return it;
+}
 
 // ------------------------------------------------ v7.0: app Android · voltar com prévia, compartilhar para "A importar",
 // atualização pelo app, primeira abertura (conectar), sem internet, vibração e barra de status.
@@ -3338,24 +3527,25 @@ function mudarConexao(on_) {
 }
 
 // ---------- transporte no APK: API do Apps Script (doPost) com a chave deste celular
-async function chamarApi(fn, args) {
+async function chamarApi(fn, args, op) {          // op (v7.2.0): { etq, extra, tent } → devolve a resposta inteira
   if (!FZ_API || FZ_API.indexOf('__') === 0) throw new Error('Endereço da API não configurado neste APK.');
   const cred = lerCred();
   if (!cred && fn !== 'parear') throw new Error('Este celular não está conectado.');
-  const corpo = fn === 'parear' ? { fn, codigo: args[0], aparelho: args[1] } : { fn, args, id: cred.id, chave: cred.chave };
+  const corpo = fn === 'parear' ? { fn, codigo: args[0], aparelho: args[1] } : { fn, args, id: cred.id, chave: cred.chave, v: (window.FZ_VERSAO || '') + ' · APK ' + (NAT.versao || '') };
+  if (op) { if (op.etq) corpo.etq = op.etq; if (op.extra) corpo.extra = op.extra; if (op.tent) corpo.tent = op.tent; }
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), Servidor.limite);
   let res;
   try { res = await fetch(FZ_API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(corpo), signal: ctl.signal, redirect: 'follow' }); }
   catch (e) {
     clearTimeout(t);
-    if (e && e.name === 'AbortError') throw new Error('o servidor não respondeu em ' + Servidor.limite / 1000 + ' segundos');
+    if (e && e.name === 'AbortError') { const x = new Error('o servidor não respondeu em ' + Servidor.limite / 1000 + ' segundos'); x.tempo = true; throw x; }
     mudarConexao(false); const x = new Error('Sem internet'); x.semRede = true; throw x;
   }
   clearTimeout(t);
   let j; try { j = await res.json(); } catch (e) { throw new Error('resposta inválida do servidor (' + res.status + ')'); }
   if (NAT.off) mudarConexao(true);
-  if (!j.ok) { if (j.auth && fn !== 'parear') perderConexao(j.erro); throw new Error(j.erro || 'erro no servidor'); }
-  return j.r;
+  if (!j.ok) { if (j.auth && fn !== 'parear') perderConexao(j.erro); const x = new Error(j.erro || 'erro no servidor'); if (j.ocupada) x.ocupada = true; throw x; }
+  return op ? j : j.r;
 }
 function perderConexao(msg) {
   limparLocal(); natCred(); NAT.conectado = false; NAT.con = { passo: 'inicio', err: msg }; set();
@@ -3506,7 +3696,7 @@ function segundoPlano(fn, msg, depois_, aoFalhar) {
   let res; SYNC.n++; set();
   fila = fila.then(async () => {
     try { res = await fn(); SYNC.err = ''; if (depois_) await depois_(res); }
-    catch (e) { SYNC.err = String(e && e.message ? e.message : e); toast('Não foi salvo: ' + SYNC.err); if (aoFalhar) aoFalhar(e); }
+    catch (e) { SYNC.err = String(e && e.message ? e.message : e); toast('Não foi salvo: ' + SYNC.err); registrarErroApp('salvar', e); if (aoFalhar) aoFalhar(e); }
     finally { SYNC.n--; SYNC.ok = !SYNC.err; set(); clearTimeout(SYNC.t); SYNC.t = setTimeout(() => { SYNC.ok = false; set(); }, 2000); }
   });
   return fila.then(() => res);
@@ -3515,7 +3705,7 @@ function segundoPlano(fn, msg, depois_, aoFalhar) {
 async function acao(fn, msg, depois_) {
   SYNC.n++; set();
   try { const r = await fn(); SYNC.err = ''; if (depois_) await depois_(r); if (msg) toast(msg); return r; }
-  catch (e) { SYNC.err = String(e && e.message ? e.message : e); erro(e); }
+  catch (e) { SYNC.err = String(e && e.message ? e.message : e); erro(e); registrarErroApp('ação', e); }
   finally { SYNC.n--; SYNC.ok = !SYNC.err; set(); clearTimeout(SYNC.t); SYNC.t = setTimeout(() => { SYNC.ok = false; set(); }, 2000); }
 }
 function aplicarTudo(t) {
@@ -3535,7 +3725,8 @@ function atualizarPainel() {
   invalidar('lista', 'pend', 'venc', 'sim', 'orc', 'ana', 'reemb:', 'reemb:' + (RB ? RB.mes : ''), 'rendas', 'rel', 'cat'); invalidarMov();
   if (REV) invalidar('rev:' + REV.mes);
   clearTimeout(syncPendente);
-  syncPendente = setTimeout(() => { fila = fila.then(() => sincronizar()).then(recarregarAberto); }, 700);
+  // v7.2.0: a atualização roda ao lado dos envios (um gasto novo não espera a atualização anterior terminar)
+  syncPendente = setTimeout(() => { sincronizar().then(recarregarAberto); }, 700);
   return Promise.resolve();
 }
 function recarregarAberto() {
@@ -3547,10 +3738,35 @@ async function recarregar() {
   if (!DADOS) { const c = lerCache('tudo'); if (c) { try { aplicarTudo(c); } catch (e) { console.error(e); } } }
   await sincronizar();
 }
-async function sincronizar() {
+// v7.2.0: manda a versão dos dados que o celular já tem: "nada mudou" responde na hora. Com painelPrimeiro (puxar para
+// atualizar) ou sem nada na tela, o Painel vem numa chamada própria, mais leve, ao lado da completa.
+const SINC = { rodando: null, denovo: false };
+function sincronizar(painelPrimeiro) {
+  if (SINC.rodando) { SINC.denovo = true; return SINC.rodando; }
+  SINC.rodando = sincronizar0_(painelPrimeiro).finally(() => { SINC.rodando = null; if (SINC.denovo) { SINC.denovo = false; sincronizar(); } });
+  return SINC.rodando;
+}
+async function sincronizar0_(painelPrimeiro) {
   const lento = setTimeout(() => { if (!DADOS) set({ lento: true }); }, 8000);
-  const rapido = DADOS ? null : Promise.all([call('getListas'), call('getDados')]).then(([l, d]) => { if (!DADOS) aplicarTudo({ listas: l, dados: d }); }).catch(() => {});
-  try { const t = await call('getTudo'); gravarCache('tudo', t); aplicarTudo(t); }
+  const t0 = Date.now(), tok = DADOS ? (lerCache('tok') || '') : '';
+  let chegou = false;
+  const med = { total: 0, servidor: null, painel: null, igual: false, cache: false };
+  const rapido = (painelPrimeiro || !DADOS) ? call('getPainel', tok, !LISTAS).then(r => {
+    if (!r || r.igual || chegou || RAP.ultEscrita > t0) return;
+    med.painel = Date.now() - t0;
+    aplicarTudo({ listas: r.listas, dados: r.dados, painel: true });
+  }).catch(() => {}) : null;
+  try {
+    const t = await call('getTudo', tok);
+    chegou = true;
+    med.total = Date.now() - t0; med.servidor = t && t.tempos ? t.tempos.total : null; med.igual = !!(t && t.igual); med.cache = !!(t && t.tempos && t.tempos.cache);
+    RAP.tempos = med;
+    if (t && t.igual) return;
+    if (RAP.ultEscrita > t0) { SINC.denovo = true; return; }       // um gasto foi salvo enquanto isso: atualiza de novo
+    gravarCache('tudo', t);
+    try { if (t.token) localStorage.setItem(CV + 'tok', JSON.stringify(t.token)); } catch (e) {}
+    aplicarTudo(t);
+  }
   catch (e) {
     const msg = String(e && e.message || e);
     if (/getTudo/i.test(msg)) {
@@ -3558,7 +3774,7 @@ async function sincronizar() {
       catch (e2) { mostrarFalha(e2); }
     } else { if (rapido) await rapido; if (!DADOS) mostrarFalha(e); else if (!NAT.off) toast('Não atualizou: ' + msg); }
   }
-  finally { clearTimeout(lento); if (DADOS) set({ lento: false }); }
+  finally { clearTimeout(lento); if (DADOS) set({ lento: false }); if (DADOS) setTimeout(() => preCarregarMais(false), 2500); }
 }
 function mostrarFalha(e) { set({ falha: String(e && e.message || e || 'erro desconhecido') }); }
 
@@ -3668,7 +3884,7 @@ async function pullEnd() {
   M.pw.classList.add('settle');
   if (PL.pull < 64) { pintaPull(0, false); return; }
   vib(12); S.refreshing = true; pintaPull(60, true);
-  try { invalidar('lista', 'pend', 'venc', 'sim', 'orc', 'ana', 'rendas', 'rel', 'ajustes', 'glo', 'cat'); invalidarMov(); if (REV) invalidar('rev:' + REV.mes); await sincronizar(); recarregarAberto(); if (S.tab === 'painel') animHeroDe(0); toast('Dados atualizados'); }
+  try { invalidar('lista', 'pend', 'venc', 'sim', 'orc', 'ana', 'rendas', 'rel', 'ajustes', 'glo', 'cat'); invalidarMov(); if (REV) invalidar('rev:' + REV.mes); await sincronizar(true); recarregarAberto(); if (S.tab === 'painel') animHeroDe(0); toast(RAP.tempos && RAP.tempos.igual ? 'Tudo em dia: nada mudou na planilha' : 'Dados atualizados'); preCarregarMais(true); }
   finally { S.refreshing = false; pintaPull(0, false); set(); }
 }
 
