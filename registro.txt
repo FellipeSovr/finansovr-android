@@ -1,0 +1,190 @@
+resultado: success
+commit: c24c2994800c7e85d3adddc6ef9fd01e135eb6a2
+quando: 2026-11-01T01:46:37Z
+
+3:Fonte embutida.
+4:www/index.html pronto (API configurada, repositório FellipeSovr/finansovr-android).
+10:ok   sintaxe do script 1
+11:ok   sintaxe do script 2
+12:ok   sintaxe do script 3
+13:ok   Painel abriu
+14:ok   aba semana
+15:ok   aba lista
+16:ok   aba mais
+17:ok   aba painel
+18:ok   tela pend
+19:ok   tela imp
+20:ok   tela sim
+21:ok   tela orc
+22:ok   tela ana
+23:ok   tela venc
+24:ok   tela reemb
+25:ok   tela rendas
+26:ok   tela ajustes
+27:ok   tela glo
+28:ok   tela cat
+29:ok   gasto novo aparece na hora (enviando…)
+30:ok   gasto confirmado pela planilha
+31:ok   sem internet: gasto guardado na fila
+32:ok   sem internet: gasto na lista marcado "no celular"
+33:ok   sem internet: Painel estimado
+34:ok   internet de volta: fila enviada
+35:ok   sem erros na tela
+36:Todos os testes passaram.
+48:Fonte dos widgets embutida.
+49:Projeto Android ajustado: versão 7.2.2 (código 70202)
+61:Here are the highlights of this release:
+66:For more details see https://docs.gradle.org/8.11.1/release-notes.html
+213:https://github.com/FellipeSovr/finansovr-android/releases/tag/v7.2.2
+
+----- final do registro -----
+ - Consolidated report for warnings and deprecations
+
+For more details see https://docs.gradle.org/8.11.1/release-notes.html
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Configure project :app
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+
+> Configure project :capacitor-cordova-android-plugins
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:mergeReleaseJniLibFolders
+> Task :capacitor-android:preBuild UP-TO-DATE
+> Task :capacitor-android:preReleaseBuild UP-TO-DATE
+> Task :capacitor-android:mergeReleaseJniLibFolders
+> Task :capacitor-android:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-cordova-android-plugins:preBuild UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:preReleaseBuild UP-TO-DATE
+> Task :capacitor-android:copyReleaseJniLibsProjectOnly
+> Task :capacitor-cordova-android-plugins:mergeReleaseJniLibFolders
+> Task :capacitor-cordova-android-plugins:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-cordova-android-plugins:copyReleaseJniLibsProjectOnly
+> Task :capacitor-android:generateReleaseResValues
+> Task :app:mergeReleaseNativeLibs NO-SOURCE
+> Task :app:stripReleaseDebugSymbols NO-SOURCE
+> Task :app:extractReleaseNativeSymbolTables NO-SOURCE
+> Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :capacitor-android:generateReleaseResources
+> Task :capacitor-android:packageReleaseResources
+> Task :capacitor-android:parseReleaseLocalResources
+> Task :capacitor-cordova-android-plugins:generateReleaseResValues
+> Task :capacitor-android:javaPreCompileRelease
+> Task :capacitor-cordova-android-plugins:generateReleaseResources
+> Task :capacitor-android:generateReleaseRFile
+> Task :capacitor-cordova-android-plugins:packageReleaseResources
+
+> Task :capacitor-android:compileReleaseJavaWithJavac
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :capacitor-cordova-android-plugins:javaPreCompileRelease
+> Task :capacitor-android:bundleLibRuntimeToJarRelease
+> Task :capacitor-cordova-android-plugins:parseReleaseLocalResources
+> Task :app:javaPreCompileRelease
+> Task :capacitor-cordova-android-plugins:generateReleaseRFile
+> Task :capacitor-android:writeReleaseAarMetadata
+> Task :app:checkReleaseDuplicateClasses
+> Task :capacitor-cordova-android-plugins:compileReleaseJavaWithJavac NO-SOURCE
+> Task :capacitor-cordova-android-plugins:bundleLibRuntimeToJarRelease
+> Task :app:generateReleaseResValues
+> Task :capacitor-cordova-android-plugins:writeReleaseAarMetadata
+> Task :app:checkReleaseAarMetadata
+> Task :app:mapReleaseSourceSetPaths
+> Task :app:generateReleaseResources
+> Task :app:packageReleaseResources
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease
+> Task :capacitor-android:extractDeepLinksRelease
+> Task :app:parseReleaseLocalResources
+> Task :capacitor-cordova-android-plugins:extractDeepLinksRelease
+> Task :capacitor-android:processReleaseManifest
+> Task :capacitor-cordova-android-plugins:processReleaseManifest
+> Task :capacitor-android:compileReleaseLibraryResources
+> Task :app:processReleaseMainManifest
+> Task :app:processReleaseManifest
+> Task :capacitor-cordova-android-plugins:compileReleaseLibraryResources
+> Task :app:processReleaseManifestForPackage
+> Task :capacitor-cordova-android-plugins:bundleLibCompileToJarRelease
+> Task :capacitor-android:bundleLibCompileToJarRelease
+> Task :app:desugarReleaseFileDependencies
+> Task :app:mergeReleaseStartupProfile
+> Task :app:mergeReleaseResources
+> Task :capacitor-android:prepareReleaseArtProfile
+> Task :capacitor-cordova-android-plugins:prepareReleaseArtProfile
+> Task :app:mergeReleaseArtProfile
+> Task :app:mergeReleaseShaders
+> Task :app:compileReleaseShaders NO-SOURCE
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-android:mergeReleaseShaders
+> Task :capacitor-android:compileReleaseShaders NO-SOURCE
+> Task :capacitor-android:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-android:packageReleaseAssets
+> Task :capacitor-cordova-android-plugins:mergeReleaseShaders
+> Task :capacitor-cordova-android-plugins:compileReleaseShaders NO-SOURCE
+> Task :capacitor-cordova-android-plugins:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:packageReleaseAssets
+> Task :app:mergeReleaseAssets
+> Task :app:compressReleaseAssets
+> Task :app:extractReleaseVersionControlInfo
+> Task :app:processReleaseResources
+> Task :app:mergeExtDexRelease
+
+> Task :app:compileReleaseJavaWithJavac
+Note: /home/runner/work/finansovr-android/finansovr-android/android/app/src/main/java/br/finansovr/app/FzPlugin.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :app:dexBuilderRelease
+> Task :app:processReleaseJavaRes NO-SOURCE
+> Task :capacitor-android:processReleaseJavaRes NO-SOURCE
+> Task :capacitor-cordova-android-plugins:processReleaseJavaRes NO-SOURCE
+> Task :app:mergeReleaseGlobalSynthetics
+> Task :app:collectReleaseDependencies
+> Task :app:sdkReleaseDependencyData
+> Task :app:validateSigningRelease
+> Task :app:writeReleaseAppMetadata
+> Task :app:writeReleaseSigningConfigVersions
+> Task :capacitor-android:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-android:copyReleaseJniLibsProjectAndLocalJars
+> Task :app:optimizeReleaseResources
+> Task :capacitor-android:extractDeepLinksForAarRelease
+> Task :app:mergeReleaseJavaResource
+> Task :app:mergeDexRelease
+> Task :capacitor-android:extractReleaseAnnotations
+> Task :capacitor-android:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-android:mergeReleaseConsumerProguardFiles
+> Task :capacitor-android:prepareLintJarForPublish
+> Task :capacitor-android:mergeReleaseJavaResource
+> Task :capacitor-android:mapReleaseSourceSetPaths
+> Task :capacitor-android:syncReleaseLibJars
+> Task :capacitor-android:bundleReleaseAar
+> Task :app:compileReleaseArtProfile
+> Task :capacitor-android:mergeReleaseResources
+> Task :capacitor-cordova-android-plugins:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-cordova-android-plugins:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-cordova-android-plugins:extractDeepLinksForAarRelease
+> Task :capacitor-android:verifyReleaseResources
+> Task :capacitor-cordova-android-plugins:extractReleaseAnnotations
+> Task :capacitor-android:assembleRelease
+> Task :capacitor-cordova-android-plugins:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-cordova-android-plugins:mergeReleaseConsumerProguardFiles
+> Task :capacitor-cordova-android-plugins:prepareLintJarForPublish
+> Task :app:packageRelease
+> Task :app:createReleaseApkListingFileRedirect
+> Task :app:assembleRelease
+> Task :capacitor-cordova-android-plugins:mergeReleaseJavaResource
+> Task :capacitor-cordova-android-plugins:mapReleaseSourceSetPaths
+> Task :capacitor-cordova-android-plugins:syncReleaseLibJars
+> Task :capacitor-cordova-android-plugins:bundleReleaseAar
+> Task :capacitor-cordova-android-plugins:mergeReleaseResources
+> Task :capacitor-cordova-android-plugins:verifyReleaseResources
+> Task :capacitor-cordova-android-plugins:assembleRelease
+[Incubating] Problems report is available at: file:///home/runner/work/finansovr-android/finansovr-android/android/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 1m 46s
+97 actionable tasks: 97 executed
+https://github.com/FellipeSovr/finansovr-android/releases/tag/v7.2.2
