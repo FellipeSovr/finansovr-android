@@ -24,7 +24,8 @@ public class ConferirWorker extends Worker {
         String api = sp.getString("api", ""), id = sp.getString("id", ""), chave = sp.getString("chave", "");
         if (api.isEmpty() || id.isEmpty() || chave.isEmpty()) return Result.success();
         int hora = getInputData().getInt("hora", 18);
-        boolean notif = sp.getBoolean("notif", false), lembrete = sp.getBoolean("lembrete", false);
+        boolean notif = sp.getBoolean("notif", false), lembrete = sp.getBoolean("lembrete", false), domingo = sp.getBoolean("domingo", true);
+        boolean comFila = Fila.itens(c).length() > 0;              // v7.2.2: com gasto na fila, o widget fica com a estimativa do app
         try {
             JSONObject corpo = new JSONObject();
             corpo.put("id", id);
@@ -37,6 +38,7 @@ public class ConferirWorker extends Worker {
                 args.put(String.valueOf(hora));
                 JSONObject o = new JSONObject();
                 o.put("lembrete", lembrete);
+                o.put("domingo", domingo);
                 args.put(o);
             }
             corpo.put("args", args);
@@ -45,10 +47,10 @@ public class ConferirWorker extends Worker {
             JSONObject x = r.optJSONObject("r");
             if (x == null) return Result.success();
             if (hora == 0) {
-                Widgets.salvarNumeros(c, x);
+                if (!comFila) Widgets.salvarNumeros(c, x);
             } else {
                 JSONObject w = x.optJSONObject("widget");
-                if (w != null) Widgets.salvarNumeros(c, w);
+                if (w != null && !comFila) Widgets.salvarNumeros(c, w);
                 JSONArray itens = x.optJSONArray("itens");
                 if (itens != null) Avisos.mostrarNovos(c, itens, notif);
             }

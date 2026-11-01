@@ -1,6 +1,7 @@
 // Testes automáticos antes de compilar o APK (v7.2.0). Para o build se algo falhar.
 // 1) sintaxe de todos os scripts da tela; 2) a tela abre com dados de exemplo (ci/fixture.json, fictícios) e sem erros;
-// 3) as abas e as telas do Mais montam; 4) um gasto novo aparece na lista na hora ("enviando…") e é confirmado.
+// 3) as abas e as telas do Mais montam; 4) um gasto novo aparece na lista na hora ("enviando…") e é confirmado;
+// 5) (v7.2.2) sem internet, o gasto vai para a fila do celular e sai quando a conexão volta.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,6 +65,17 @@ await p.click('#sheetEl .save'); await p.waitForTimeout(700);
 ok(await p.evaluate(() => LANCS.some(x => x.desc === 'Teste automático' && x.pend === 'env')), 'gasto novo aparece na hora (enviando…)');
 await p.waitForTimeout(1500);
 ok(await p.evaluate(() => LANCS.some(x => x.desc === 'Teste automático' && x.linha === 2500 && !x.pend)), 'gasto confirmado pela planilha');
+// v7.2.2: sem internet o gasto vai para a fila do celular, o Painel fica estimado e a fila sai quando a conexão volta
+await p.evaluate(() => { NAT.simula = true; mudarConexao(false); go('painel'); }); await p.waitForTimeout(400);
+await p.evaluate(() => { const at = atalhosLista(); abrirLancar(at.length ? { atalho: at[0] } : {}); });
+await p.waitForTimeout(600);
+await p.evaluate(() => { const c = (LISTAS.categorias || []).find(x => !(LISTAS.reservadas || []).includes(x)) || LISTAS.categorias[0]; S.f = Object.assign({}, S.f, { valor: '10,00', desc: 'Sem internet', cat: c, meio: 'Pix' }); set(); });
+await p.click('#sheetEl .save'); await p.waitForTimeout(1200);
+ok(await p.evaluate(() => FL.itens.length === 1 && FL.itens[0].args[0].origem === 'App · offline'), 'sem internet: gasto guardado na fila');
+ok(await p.evaluate(() => LANCS.some(x => x.desc === 'Sem internet' && x.pend === 'fila')), 'sem internet: gasto na lista marcado "no celular"');
+ok(await p.evaluate(() => NAT.estimado && !!document.querySelector('.estb')), 'sem internet: Painel estimado');
+await p.evaluate(() => mudarConexao(true)); await p.waitForTimeout(3000);
+ok(await p.evaluate(() => FL.itens.length === 0 && LANCS.some(x => x.desc === 'Sem internet' && x.linha > 0 && !x.pend) && !NAT.estimado), 'internet de volta: fila enviada');
 ok(erros.length === 0, 'sem erros na tela' + (erros.length ? ': ' + erros.slice(0, 3).join(' | ') : ''));
 await b.close();
 if (falhas) { console.log(falhas + ' teste(s) falharam'); process.exit(1); }

@@ -75,6 +75,7 @@ public class FzPlugin extends Plugin {
         p(r, "aparelho", (Build.MANUFACTURER + " " + Build.MODEL).trim());
         p(r, "sat", Double.valueOf(MainActivity.sat));
         p(r, "sab", Double.valueOf(MainActivity.sab));
+        p(r, "rede", Boolean.valueOf(MainActivity.temRede(getContext())));
         call.resolve(r);
     }
 
@@ -257,11 +258,30 @@ public class FzPlugin extends Plugin {
 
     @PluginMethod
     public void agenda(PluginCall call) {
-        Boolean n = call.getBoolean("notif", false), l = call.getBoolean("lembrete", false);
-        Avisos.prefs(getContext()).edit().putBoolean("notif", n != null && n).putBoolean("lembrete", l != null && l).apply();
+        Boolean n = call.getBoolean("notif", false), l = call.getBoolean("lembrete", false), dm = call.getBoolean("domingo", true);
+        Avisos.prefs(getContext()).edit().putBoolean("notif", n != null && n).putBoolean("lembrete", l != null && l)
+                .putBoolean("domingo", dm == null || dm).apply();
         Avisos.canal(getContext());
         Avisos.agendar(getContext());
         call.resolve();
+    }
+
+    // ---------- v7.2.2: cópia da fila de gastos sem internet (enviada pelo Android quando a conexão volta)
+    @PluginMethod
+    public void fila(PluginCall call) {
+        JSArray l = call.getArray("itens", new JSArray());
+        Fila.guardar(getContext(), l == null ? new org.json.JSONArray() : l);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void filaEstado(PluginCall call) {
+        JSONObject e = Fila.estado(getContext(), call.getBoolean("limpar", false));
+        JSObject r = new JSObject();
+        p(r, "feitos", e.opt("feitos"));
+        p(r, "erros", e.opt("erros"));
+        p(r, "pendentes", e.opt("pendentes"));
+        call.resolve(r);
     }
 
     @PluginMethod

@@ -434,8 +434,13 @@ body{overflow:hidden;-webkit-tap-highlight-color:transparent;-webkit-text-size-a
 html.nativo .vp{max-width:none}
 
 /* v7.2.0: lançamento indo para a planilha */
-.pdg{font-weight:700}.pdg.env{color:#8FE6FF}.pdg.esp{color:#FFC85C}
-.claro .pdg.env{color:#1D7FC4}.claro .pdg.esp{color:#9A6A00}
+.pdg{font-weight:700}.pdg.env{color:#8FE6FF}.pdg.esp{color:#FFC85C}.pdg.fila{color:#FFC85C}.pdg.erro{color:#FF8FB6}
+.claro .pdg.env{color:#1D7FC4}.claro .pdg.esp{color:#9A6A00}.claro .pdg.fila{color:#9A6A00}.claro .pdg.erro{color:#C2185B}
+.estb{margin:12px 16px 0;padding:12px 14px;border-radius:20px;display:flex;align-items:center;gap:12px;cursor:pointer;border-color:rgba(255,200,92,.35) !important;background:linear-gradient(140deg,rgba(255,200,92,.14),rgba(255,200,92,.04)) !important}
+.estb b{display:block;font-size:13.5px;font-weight:700;color:#FFC85C}.estb span{display:block;font-size:12px;color:var(--t2);margin-top:1px}
+.estb.erro{border-color:rgba(255,143,182,.35) !important;background:linear-gradient(140deg,rgba(255,143,182,.14),rgba(255,143,182,.04)) !important}.estb.erro b{color:#FF8FB6}
+.claro .estb b{color:#9A6A00}.claro .estb.erro b{color:#C2185B}
+.offp.env{color:#8FE6FF}.claro .offp.env{color:#1D7FC4}
 
 </style>
 </head>
@@ -521,7 +526,7 @@ html.nativo .vp{max-width:none}
   <input type="file" id="arqIn" class="fileh" multiple accept="application/pdf,image/*,.csv,.ofx,.xlsx" onchange="enviarArquivos(this)" tabindex="-1" aria-hidden="true">
 </div>
 <script>
-window.FZ_VERSAO = 'v7.2.0';
+window.FZ_VERSAO = 'v7.2.2';
 window.FZ_API = '__FZ_API_URL__'; window.FZ_REPO = '__FZ_REPO__';
 window.__fzErros = [];
 window.addEventListener('error', function (ev) { window.__fzErros.push((ev.message || 'erro') + (ev.lineno ? ' (linha ' + ev.lineno + ')' : '')); });
@@ -554,7 +559,13 @@ const Servidor = {
     });
   }
 };
-function call(fn, ...args) { return Servidor.chamar(fn, args); }
+function call(fn, ...args) {
+  if (typeof NAT !== 'undefined' && NAT.off && !/^get(Tudo|Painel)$/.test(fn)) {   // v7.2.2: sem internet, gastos vão pela fila; o resto avisa na hora
+    const e = new Error(/^(get|listar)/.test(fn) ? 'Sem internet' : 'Sem internet: isso precisa de conexão. Gastos podem ser lançados normalmente.'); e.semRede = true;
+    return Promise.reject(e);
+  }
+  return Servidor.chamar(fn, args);
+}
 const CV = 'finansovr1:', MEM = {}, FRESCO = 60000;
 function lerCache(k){ try { const x = localStorage.getItem(CV + k); return x ? JSON.parse(x) : null; } catch(e){ return null; } }
 function gravarCache(k, v){ MEM[k] = {v, t: Date.now()}; try { localStorage.setItem(CV + k, JSON.stringify(v)); } catch(e){} }
@@ -565,7 +576,7 @@ async function viaCache(k, fn, render){
   if (m && Date.now() - m.t < FRESCO) return c;                 // acabou de vir do servidor: não busca de novo
   progresso(1);
   try { const v = await fn(); gravarCache(k, v); render(v, false); return v; }
-  catch(e){ if (c == null) erro(e); else toast('Sem conexão: mostrando os últimos dados'); }
+  catch(e){ if (c == null) { if (!(e && e.semRede)) erro(e); } else if (!(typeof NAT !== 'undefined' && NAT.off)) toast('Sem conexão: mostrando os últimos dados'); }
   finally { progresso(-1); }
 }
 let fila = Promise.resolve();
@@ -618,11 +629,21 @@ function expMov(r){
 const MOVX = {};                                       // itens expandidos por chave
 async function movimento(m, voltar, render){
   const k = 'mov:' + m + ':' + voltar, t0 = Date.now();
+  if (typeof NAT !== 'undefined' && NAT.off && !MOVX[k] && lerCache(k) == null && LANCS.length) {   // v7.2.2: sem internet e sem cópia: monta com o que está no celular
+    const ini = addMes(m, -voltar);
+    const meses = (x) => { const mi = x.mesIni || x.mesConsiderado || String(x.data || '').slice(0, 7), dm = String(x.data || '').slice(0, 7);
+      return { mesIni: mi, mesFim: x.mesFim || (x.tipo === 'Parcelado' ? addMes(dm, (Number(x.parcTotal) || 1) - 1) : x.tipo === 'Recorrente' ? (x.recAte ? String(x.recAte).slice(0, 7) : '9999-12') : mi) }; };
+    const it = LANCS.filter(x => !x.arquivado && !filaTira(x.linha)).map(x => x.mesIni && x.mesFim ? x : Object.assign(x, meses(x))).filter(x => x.mesIni && x.mesIni <= m && x.mesFim >= ini);
+    MOVX[k] = { r: { mes: m, ini, ref: hojeIso(), itens: [], local: 1 }, it };
+    filaNaLista(); if (render) render(MOVX[k].it, MOVX[k].r);
+    return MOVX[k].it;
+  }
   return viaCache(k, () => call('getMovimento', m, voltar), (r, doCache) => {
     if (!doCache && typeof RAP !== 'undefined' && RAP.ultEscrita > t0) { delete MEM[k]; try { localStorage.removeItem(CV + k); } catch (e) {} return; }   // v7.2.0: chegou depois de uma gravação: vale a próxima leitura
-    const it = expMov(r).filter(x => !(typeof RAP !== 'undefined' && RAP.tirando[x.linha])); MOVX[k] = {r, it};
-    it.forEach(x => { if (!x.arquivado) { const i = LANCS.findIndex(l => l.linha === x.linha); if (i >= 0) LANCS[i] = Object.assign({}, LANCS[i], x); else LANCS.push(x); } });
-    if (render) render(it, r);
+    const it = expMov(r).filter(x => !(typeof RAP !== 'undefined' && RAP.tirando[x.linha]) && !(typeof filaTira === 'function' && filaTira(x.linha))); MOVX[k] = {r, it};
+    if (!doCache) it.forEach(x => { if (!x.arquivado) { const i = LANCS.findIndex(l => l.linha === x.linha); if (i >= 0) LANCS[i] = Object.assign({}, LANCS[i], x); else LANCS.push(x); } });
+    if (typeof filaNaLista === 'function') filaNaLista();             // v7.2.2: o que está na fila do celular continua na lista
+    if (render) render(MOVX[k].it, r);
   });
 }
 function movLocal(m){                                  // o que já está em memória cobrindo o mês m
@@ -659,12 +680,13 @@ const COMO = [
   ['Reservas', 'Categorias com "Reservar" ligado (ex.: gasolina, terapia) já têm o valor separado no mês: gastar nelas sai da reserva, não do limite do dia. O que passar do planejado conta como gasto do dia em que passou.', 'Gasolina planejada R$ 1.000: com R$ 997 já gastos, um abastecimento de R$ 100 usa R$ 3 da reserva e R$ 97 contam no limite do dia.'],
   ['Terceiros e reembolsos', 'Quando alguém divide uma conta, a parte dela não conta para você. Em Reembolsos você vê quanto falta receber, cobra pelo WhatsApp e registra o que chegou. Reembolso não aumenta o limite: só abate o que falta receber.', 'Jantar de R$ 200 dividido ao meio: a sua parte é R$ 100.'],
   ['Vencimentos', 'Faturas pelo dia de vencimento de cada cartão, contas recorrentes no dia em que vencem e contas avulsas (IPVA, IPTU, anuidade), que contam como gasto no mês em que vencem. E-mail 3 dias antes e no dia. Quando o pagamento chega no extrato, a importação atualiza o valor.', 'IPVA de R$ 1.250 em janeiro: janeiro já nasce com esse valor comprometido.'],
-  ['Importação', 'Faturas e extratos na pasta "A importar" entram todo domingo às 18h ou quando você pede "importar finanças" ao Claude. Entram as compras, parcelas novas, débitos e Pix de consumo. Nunca entram: pagamento de fatura, investimentos, transferências entre contas suas e entradas. PDF com senha fica aguardando: informe a senha na conversa (ela não é salva). Cada importação deixa um relatório em Mais › Importar.', ''],
+  ['Importação', 'Faturas e extratos na pasta "A importar" entram todo domingo às 18h ou quando você pede "importar finanças" ao Claude. Entram as compras, parcelas novas, débitos e Pix de consumo. Nunca entram: pagamento de fatura, investimentos, transferências entre contas suas e entradas. PDF com senha fica aguardando: informe a senha na conversa (ela não é salva). Cada importação deixa um relatório em Mais › Importar. Com as notificações ligadas, o lembrete de domingo avisa por volta das 12h para anexar as faturas e os extratos antes das 18h (dá para desligar em Ajustes). Um gasto lançado sem internet que também aparece na fatura entra de novo e vai para Pendências como possível duplicidade.', ''],
   ['Glossário e classificação', 'O glossário liga parte do nome do estabelecimento a uma categoria. A importação e o formulário consultam primeiro ali. Só os casos duvidosos viram pendência; ao confirmar, você pode lembrar o estabelecimento para as próximas vezes.', '"POSTO" pega "AUTO POSTO GUIGUI" → Gasolina.'],
   ['Modo recuperação, 🔥 e resumo semanal', 'Se um mês fecha abaixo da meta, no dia 1 o modo recuperação liga sozinho e sugere um limite menor para recuperar a diferença dentro do mês (no máximo metade do ritmo do mês; o resto é perdoado). O 🔥 conta os dias seguidos dentro do limite (com limite R$ 0, só dias sem gasto). Todo domingo o resumo da semana chega junto com a importação.', 'Faltaram R$ 600 em setembro: em outubro, ~R$ 19 a menos por dia.'],
   ['Revisão do mês', 'A partir do dia 1, depois da importação do mês que fechou, a faixa "Revisar" aparece no Painel. São 7 passos: pendências, faturas e extratos, assinaturas, reembolsos, resultado, próximo mês e concluir. Ao concluir, sai o e-mail de fechamento; se não concluir até o dia 5, ele sai mesmo assim.', ''],
   ['Rotinas automáticas', 'Todo dia às 8h: alertas da semana, vencimentos e o limite do dia guardado. Domingo: backup da planilha (guarda 8) e diagnóstico. Dia 1: lançamentos com mais de 6 meses e sem efeito vão para a aba Arquivo. O estado de cada rotina aparece em Ajustes.', ''],
-  ['Desfazer e esconder valores', 'Depois de lançar, editar, excluir ou decidir uma pendência, o botão Desfazer fica 4 segundos na tela. O olho no topo esconde os valores (inclusive nos gráficos); segure em qualquer ponto da tela para ver os valores por 3 segundos.', '']
+  ['Desfazer e esconder valores', 'Depois de lançar, editar, excluir ou decidir uma pendência, o botão Desfazer fica 4 segundos na tela. O olho no topo esconde os valores (inclusive nos gráficos); segure em qualquer ponto da tela para ver os valores por 3 segundos.', ''],
+  ['Sem internet', 'O app abre com os últimos dados. Gastos novos, edições, exclusões e o "pretendo gastar" ficam guardados neste celular e vão sozinhos para a planilha quando a conexão volta, mesmo com o app fechado. Enquanto isso, o Painel e o widget mostram valores estimados pelas mesmas regras da planilha. Se um gasto ficar mais de 24 horas sem ir, chega uma notificação. As outras telas e ajustes precisam de conexão.', 'Lançou R$ 30 no metrô sem sinal: o Painel já desconta, marcado como estimado, e o gasto entra na planilha quando o celular pegar a rede.']
 ];
 COMO.push(['Lançar rápido e gestos', 'Toque no + para lançar um gasto. Segure o + para abrir os gastos mais frequentes e solte sobre um para lançar com o valor de sempre (dá para desfazer). Nas listas, deslize para a esquerda para excluir e para a direita para duplicar para hoje. Puxe a tela para baixo para atualizar e arraste as janelas para baixo para fechar.', '']);
 COMO.push(['Tema', 'Em Ajustes › Tema: Automático segue o aparelho; Escuro e Claro fixam a aparência. Os e-mails automáticos seguem o mesmo tema.', '']);
@@ -887,7 +909,7 @@ function topoHTML() {
   const sl = SYNC.n ? 'Salvando' : SYNC.err ? 'Não consegui salvar' : SYNC.ok ? 'Salvo' : 'Sincronizado';
   return `<div class="hd ${S.cmp ? 'cmp' : ''} ${S.cmp && S.tab !== 'painel' ? 'tt' : ''}" style="position:absolute;left:0;right:0;top:0;height:calc(78px + var(--sat));z-index:6;padding:calc(16px + var(--sat)) 20px 0;box-sizing:border-box;display:flex;align-items:center;gap:10px;background:linear-gradient(180deg,var(--bg) 58%,var(--bg0));pointer-events:none">
     <div class="ct" aria-hidden="true">${esc(tit)}</div>
-    <div class="lb" style="flex:1"><div class="nm"><span>Finansovr</span><span class="dts">· ${DABR[new Date(iso + 'T12:00:00').getDay()]}, ${+iso.slice(8, 10)}</span><button type="button" class="sync ${sc}" onclick="${on(() => { if (SYNC.err) toast('Não consegui salvar · ' + SYNC.err, () => { SYNC.err = ''; set(); sincronizar(); }); else toast(SYNC.n ? 'Salvando na planilha…' : 'Tudo salvo na planilha'); })}" aria-label="${sl}" style="border:0;padding:0;pointer-events:auto"></button></div><div class="dt">${NAT.off ? `<span class="offp" data-k="off"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M2 8.8a15 15 0 0 1 4.2-2.6M9.8 5.2A15 15 0 0 1 22 8.8M5 12.6a10 10 0 0 1 3.4-2M14 10.3a10 10 0 0 1 5 2.3M8.5 16.1a5 5 0 0 1 7 0M12 20h.01M3 3l18 18"></path></svg>Sem internet · dados das ${esc(NAT.offDesde)}</span>` : esc(dataLonga())}</div></div>
+    <div class="lb" style="flex:1"><div class="nm"><span>Finansovr</span><span class="dts">· ${DABR[new Date(iso + 'T12:00:00').getDay()]}, ${+iso.slice(8, 10)}</span><button type="button" class="sync ${sc}" onclick="${on(() => { if (SYNC.err) toast('Não consegui salvar · ' + SYNC.err, () => { SYNC.err = ''; set(); sincronizar(); }); else toast(SYNC.n ? 'Salvando na planilha…' : 'Tudo salvo na planilha'); })}" aria-label="${sl}" style="border:0;padding:0;pointer-events:auto"></button></div><div class="dt">${NAT.off ? `<span class="offp" data-k="off"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M2 8.8a15 15 0 0 1 4.2-2.6M9.8 5.2A15 15 0 0 1 22 8.8M5 12.6a10 10 0 0 1 3.4-2M14 10.3a10 10 0 0 1 5 2.3M8.5 16.1a5 5 0 0 1 7 0M12 20h.01M3 3l18 18"></path></svg>Sem internet · ${filaN() ? filaN() + ' para enviar' : 'dados das ' + esc(NAT.offDesde)}</span>` : FL.env && filaN() ? `<span class="offp env" data-k="env">Enviando ${filaN()} para a planilha…</span>` : esc(dataLonga())}</div></div>
     <button type="button" class="gl hb press" onclick="${on(() => abrirSheet('fogo'))}" aria-label="${n + (n === 1 ? ' dia seguido' : ' dias seguidos')} dentro do limite" style="pointer-events:auto"><span class="${S.fogoK ? (S.fogoK % 2 ? 'flA' : 'flB') : ''}" style="display:grid;color:#FFC26B">${icoSvg('#i-flame', 18, 1.9)}</span>${n}</button>
     <button type="button" class="gl hb press" onclick="${on(alternarOculto)}" aria-label="${S.hide ? 'Mostrar valores' : 'Esconder valores'}" aria-pressed="${S.hide}" style="pointer-events:auto;padding:0">
       ${S.hide ? '<svg class="pop2" data-k="olhoF" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 3l18 18"></path><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17.4 17.4 0 0 0 2 12s3.6 7 10 7a10 10 0 0 0 4.4-1"></path></svg>'
@@ -1024,6 +1046,8 @@ function painelHTML() {
         ${av.map(a => `<button type="button" class="gl chip t press" onclick="${on(() => { vib(5); a[2](); })}" style="padding:0 14px 0 12px"><span style="width:8px;height:8px;border-radius:4px;background:${a[1]};box-shadow:0 0 8px ${a[1]};flex:0 0 auto"></span>${esc(a[0])}</button>`).join('')}
       </div>
 
+      ${FL.itens.length && (NAT.estimado || FL.itens.some(y => y.erro)) ? (() => { const er = FL.itens.some(y => y.erro), cor = er ? '#FF8FB6' : '#FFC85C';
+        return `<div class="gl estb fade${er ? ' erro' : ''}" data-k="estb" role="button" tabindex="0" onclick="${on(() => abrirG(er ? 'filaErro' : 'fila'))}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${cor}" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5"></path><circle cx="12" cy="12" r="9"></circle></svg><div style="flex:1"><b>${er ? 'Um gasto não foi para a planilha' : 'Valores estimados'}</b><span>${er ? 'Toque para ver o que a planilha respondeu' : (filaN() === 1 ? '1 gasto espera' : filaN() + ' gastos esperam') + (NAT.off ? ' a internet para ir à planilha' : ' o envio para a planilha')}</span></div>${icoSvg('#i-chev', 16, 2)}</div>`; })() : ''}
       <div class="blur" style="margin:12px 16px 0;border-radius:30px;padding:22px 22px 16px">
         <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;color:var(--t2);font-weight:500">Pode gastar hoje</span><span class="st ${neg ? 'bad' : 'ok'}">${neg ? 'passou do limite' : 'dentro do limite'}</span></div>
         <div class="hero-n ${neg ? 'neg' : ''}" id="heroN" data-fixo>${fm(S.heroShown)}</div>
@@ -1399,8 +1423,9 @@ function salvarInformado(s, v) {
   v = String(v || '').trim();
   const antes = s.informado === '' ? '' : br(s.informado);
   if (v === antes) return;
-  segundoPlano(() => call('salvarGastoInformado', s.data, v), null, () => sincronizar());
-  toast('Semana atualizada', () => { S.plano = Object.assign({}, S.plano, { [s.data]: antes }); set(); segundoPlano(() => call('salvarGastoInformado', s.data, antes), null, () => sincronizar()); });
+  // v7.2.2: passa por gasto(): sem internet vai para a fila do celular e o Painel estimado já considera
+  segundoPlano(gasto('salvarGastoInformado', s.data, v), null, () => atualizarPainel());
+  toast(filaAtiva() && NAT.off ? 'Sem internet: guardado no celular' : 'Semana atualizada', () => { S.plano = Object.assign({}, S.plano, { [s.data]: antes }); set(); segundoPlano(gasto('salvarGastoInformado', s.data, antes), null, () => atualizarPainel()); });
 }
 
 // ------------------------------------------------ Lançamentos
@@ -1446,7 +1471,7 @@ function listaDados() {
 function itemLista(x, m) {
   const aberto = S.swOpen === x.linha, xx = aberto ? -96 : 0, a = icDe(x.cat), ign = !ativoX(x);
   const corpo = `${icSpan(a[1], ih(a[0]), 40, 14, 21, 1.7)}
-                  <div style="flex:1;min-width:0"><div class="nm"${ign ? ' style="text-decoration:line-through"' : ''}>${esc(x.desc)}</div><div class="sb">${x.pend ? `<span class="pdg ${x.pend}" data-k="pd${x.pend}">${x.pend === 'esp' ? 'aguardando a planilha' : 'enviando…'}</span> · ` : ''}${sbLancH(x, m)}</div></div>
+                  <div style="flex:1;min-width:0"><div class="nm"${ign ? ' style="text-decoration:line-through"' : ''}>${esc(x.desc)}</div><div class="sb">${x.pend ? `<span class="pdg ${x.pend}" data-k="pd${x.pend}">${PDG[x.pend] || 'enviando…'}</span> · ` : ''}${sbLancH(x, m)}</div></div>
                   <div class="vl">${fm(x.suaParte)}</div>`;
   if (x.arquivado) return `<div class="swr" data-k="l${x.linha}a"><div class="it" style="opacity:.6" role="button" tabindex="0" onclick="${on(() => verArquivadoMov(x.linha))}">${corpo}</div></div>`;
   return `<div class="swr" data-k="l${x.linha}">
@@ -1611,7 +1636,8 @@ function maisHTML() {
     if (k === 'pend') pre = pendHTML();
     if (k === 'ajustes') pre = ajustesTopoHTML();
     let bl = [];
-    try { bl = (TELAS[k] ? TELAS[k]() : []) || []; } catch (e) { console.error(e); bl = [bk('Txt', { t: 'Não consegui montar esta tela: ' + e.message })]; }
+    if (NAT.off && CARGA[k] && !temDados(k)) bl = [bk('Empty', { t: 'Sem internet', s: 'Esta tela ainda não foi aberta neste celular. Ela carrega quando a conexão voltar; gastos podem ser lançados normalmente.' })];
+    else try { bl = (TELAS[k] ? TELAS[k]() : []) || []; } catch (e) { console.error(e); bl = [bk('Txt', { t: 'Não consegui montar esta tela: ' + e.message })]; }
     corpo = `<div data-k="sr">${pre}${blocosHTML(bl)}</div>`;
   }
   return `<div data-k="sub-${k}" class="${S.subOut ? 'out-r' : 'in-r'}">
@@ -1986,7 +2012,8 @@ TELAS.ajustes = () => {
     bk('List', { items: (NAT.app || NAT.simula ? [L('#8FE6FF', '#m-cel', 'App Android', 'versão ' + NAT.versao + (NAT.nova ? ' · nova ' + NAT.nova.versao + ' disponível' : ' · em dia'), NAT.nova ? 'nova' : '', '', () => abrirG('app'), { vcls: NAT.nova ? 'okb' : '' })] : [])
       .concat([L('#B9A6FF', '#m-qr', 'Conectar um celular', 'mostra o QR code para o app Android', '', '', () => { S.qr = null; S.qrErr = ''; abrirG('qr'); })]) }),
     bk('SwG', { items: (NAT.app || NAT.simula ? [{ t: 'Notificações no celular', sb: 'vencimentos às 12h · avisos às 18h · limite na hora', val: notifOn(), on: alternarNotif }]
-        .concat(notifOn() ? [{ t: 'Lembrete de lançar o dia', sb: 'às 18h, se nada foi lançado', val: lembreteOn(), on: alternarLembrete }] : []) : [])
+        .concat(notifOn() ? [{ t: 'Lembrete de lançar o dia', sb: 'às 18h, se nada foi lançado', val: lembreteOn(), on: alternarLembrete },
+          { t: 'Lembrete de domingo', sb: 'anexar faturas e extratos, por volta das 12h', val: domingoOn(), on: alternarDomingo }] : []) : [])
       .concat([{ t: 'E-mails automáticos', sb: 'alertas e resumos também por e-mail', val: emailsOn(), on: alternarEmails },
         { t: 'Vibrar ao tocar', sb: 'só neste aparelho', val: vibOn(), on: alternarVib }]) }),
     bk('H', { t: 'Ajuda' }),
@@ -2334,6 +2361,7 @@ function salvarGasto() {
     parcAtual: f.tipo === 'Parcelado' ? String(f.pa) : '', parcTotal: f.tipo === 'Parcelado' ? String(f.parc) : '', terceiros: f.div ? f.terc : '', mesFatura: f.mesFat,
     recAte: f.tipo === 'Recorrente' ? f.recAte : '', recorrencia: f.tipo === 'Recorrente' ? f.recorr : '', status: f.status || 'Ativo', obs: f.obs };
   const edit = !!o.linha, orig = f.orig;
+  if (edit) guardarAntes(Number(o.linha));                     // v7.2.2: como estava, para o Painel estimado sem internet
   if (edit) { const x = LANCS.find(l => l.linha === Number(o.linha)); if (x) Object.assign(x, o, { linha: Number(o.linha), valor: numBR(o.valor), terceiros: o.terceiros === '' ? '' : numBR(o.terceiros) }); Object.values(MOVX).forEach(m => m.it.forEach(y => { if (y.linha === Number(o.linha)) Object.assign(y, { desc: o.desc, cat: o.cat, meio: o.meio, cartao: o.cartao, valor: numBR(o.valor), suaParte: numBR(o.valor) - (numBR(o.terceiros) || 0), status: o.status }); })); }
   set({ saveOk: true });
   setTimeout(() => {
@@ -2342,12 +2370,14 @@ function salvarGasto() {
       (r) => { if (r && r.linha) { NOVOS64[r.linha] = 1; setTimeout(() => marcarNovo(r.linha), 900); } if (r && r.aprender) setTimeout(() => abrirG('lembrar', { a: r.aprender }), 700); return atualizarPainel(); },
       () => { S.f = Object.assign({}, f); abrirSheet('lancar'); });
     if (!edit && o.data >= ((semInfo().sem[0] || {}).data || '9999')) { const gd = gastoNoDia(o, (numBR(o.valor) || 0) - (numBR(o.terceiros) || 0)); if (gd.dia > 0.004) natLimite(gd.dia); }
-    if (edit && orig) toast('Alterações salvas', () => segundoPlano(gasto('restaurarLancamentos', [orig]), 'Alteração desfeita', atualizarPainel));
-    else toast('Gasto salvo', () => segundoPlano(async () => { const r = await p; if (r && r.linha) return callGasto('restaurarLancamentos', [{ linha: r.linha, excluir: true }]); }, 'Lançamento desfeito', atualizarPainel));
+    const off = filaAtiva() && NAT.off;
+    if (edit && orig) toast(off ? 'Sem internet: alteração guardada no celular' : 'Alterações salvas', () => segundoPlano(gasto('restaurarLancamentos', [orig]), 'Alteração desfeita', atualizarPainel));
+    else toast(off ? 'Sem internet: gasto guardado no celular' : 'Gasto salvo', () => segundoPlano(async () => { const r = await p; if (r && r.linha) return callGasto('restaurarLancamentos', [{ linha: r.linha, excluir: true }]); }, 'Lançamento desfeito', atualizarPainel));
   }, reduz() ? 0 : 450);
 }
 function excluirRapido(l) {
   const x = acharLanc(l) || {}; const orig = copiaLanc(x); orig.linha = l;
+  if (l > 0) TIRADOS[l] = Object.assign({}, x);                // v7.2.2: para a fila e o Painel estimado
   tirarLocal(l); vib(18); set({ swOpen: null });
   segundoPlano(gasto('excluirLancamento', l), null, atualizarPainel);
   toast('Lançamento excluído', () => segundoPlano(gasto('restaurarLancamentos', [orig]), 'Lançamento de volta', atualizarPainel));
@@ -3030,8 +3060,8 @@ function chamarX(fn, args, op) {
   return Servidor.chamar(fn, args).then(r => ({ r }));          // tela web: sem extras (o app atualiza depois, como antes)
 }
 const RAP = { tirando: {}, esp: 0, avisou: 0, ultEscrita: 0, tempos: null, salvar: null, espera: 60000 };
-async function enviar(fn, args, extra, linhaLocal) {
-  const etq = novaEtq(); let tent = 0;
+async function enviar(fn, args, extra, linhaLocal, etqDada) {
+  const etq = etqDada || novaEtq(); let tent = 0;
   for (;;) {
     const t0 = Date.now();
     try {
@@ -3058,11 +3088,12 @@ async function enviar(fn, args, extra, linhaLocal) {
 
 // ---------- itens locais nas listas
 function itemLocal(o, linha, pend) {
-  const v = numBR(o.valor) || 0, t = numBR(o.terceiros) || 0, m = String(o.data || hojeIso()).slice(0, 7);
+  const v = numBR(o.valor) || 0, t = numBR(o.terceiros) || 0, m = String(o.data || hojeIso()).slice(0, 7), pa = Number(o.parcAtual) || 1;
+  const mi = o.tipo === 'Parcelado' ? addMes(m, pa - 1) : m;           // como a planilha: parcela pa cai no mês da compra + (pa − 1)
   return { linha, data: o.data, desc: o.desc, cat: o.cat, meio: o.meio, cartao: o.cartao || '', tipo: o.tipo || 'Único', valor: v, parcAtual: o.parcAtual || '', parcTotal: o.parcTotal || '',
-    terceiros: o.terceiros === '' || o.terceiros === undefined ? '' : t, mesFatura: o.mesFatura || '', recAte: o.recAte || '', recorrencia: o.recorrencia || '', status: o.status || 'Ativo', origem: 'App', ref: '', obs: o.obs || '',
-    mesIni: m, mesFim: o.tipo === 'Parcelado' ? addMes(m, (Number(o.parcTotal) || 1) - (Number(o.parcAtual) || 1)) : o.tipo === 'Recorrente' ? (o.recAte || addMes(m, 120)) : m,
-    mesConsiderado: m, valorCons: v, suaParte: v - t, reservada: (LISTAS && LISTAS.reservadas || []).includes(o.cat), diaLimite: gastoNoDia(o, v - t).dia, alerta: '', id: '', mesCobranca: '', arquivado: false, pend };
+    terceiros: o.terceiros === '' || o.terceiros === undefined ? '' : t, mesFatura: o.mesFatura || '', recAte: o.recAte || '', recorrencia: o.recorrencia || '', status: o.status || 'Ativo', origem: o.origem || 'App', ref: '', obs: o.obs || '',
+    mesIni: mi, mesFim: o.tipo === 'Parcelado' ? addMes(m, (Number(o.parcTotal) || 1) - 1) : o.tipo === 'Recorrente' ? (o.recAte || addMes(m, 120)) : m,
+    mesConsiderado: mi, valorCons: v, suaParte: v - t, reservada: (LISTAS && LISTAS.reservadas || []).includes(o.cat), diaLimite: gastoNoDia(o, v - t).dia, alerta: '', id: '', mesCobranca: '', arquivado: false, pend };
 }
 function porNaLista(x) {
   if (!LANCS.some(y => y.linha === x.linha)) LANCS.push(x);
@@ -3078,27 +3109,39 @@ const VOO = {}, VOO_FORA = {};                                          // linha
 let TMP = -1;
 function gasto(fn, ...args) {
   const o = args[0] || {}, novo = fn === 'salvarLancamento' && !o.linha, ed = fn === 'salvarLancamento' && Number(o.linha) > 0;
+  const etq = novaEtq();                                                   // a mesma etiqueta vale se o gasto for para a fila (v7.2.2)
   let tmp = 0, fim = null;
+  const antes = ed ? antesDe(Number(o.linha)) : null;
   if (novo) { tmp = TMP--; porNaLista(itemLocal(o, tmp, 'env')); VOO[tmp] = new Promise(r => { fim = r; }); set(); }
   else if (ed) marcarLocal(Number(o.linha), { pend: 'env' });
   else if (fn === 'excluirLancamento' && Number(args[0]) < 0) VOO_FORA[Number(args[0])] = 1;
   else if (fn === 'restaurarLancamentos' && Array.isArray(o)) o.forEach(x => { const l = Number(x.linha); if (!(l > 0)) return; tirarLocal(l); if (!x.excluir) porNaLista(itemLocal(x, l, 'env')); });
   return async () => {
+    // v7.2.2: lançamento provisório que ainda está indo espera o envio terminar (linha real, 0 ou "foi para a fila");
+    // o que estiver na fila do celular (ou tiver ação na fila) se resolve aqui mesmo
+    const real = async (l) => { const r = await VOO[l]; return r === 'fila' ? (FL.mapa[l] || 0) : r; };
+    const negs = fn === 'salvarLancamento' ? [Number(o.linha)] : fn === 'excluirLancamento' ? [Number(args[0])] : fn === 'restaurarLancamentos' && Array.isArray(args[0]) ? args[0].map(x => Number(x.linha)) : [];
+    await Promise.all(negs.filter(l => l < 0 && VOO[l]).map(l => VOO[l]));
+    if (filaAtiva()) { const loc = await filaLocal(fn, args); if (loc) { if (novo) fim(0); return loc; } }
     // lançamento que ainda está indo para a planilha: espera a linha real
-    if (fn === 'salvarLancamento' && Number(o.linha) < 0) { const l = await VOO[Number(o.linha)]; if (!l) throw new Error('o lançamento não chegou à planilha'); args[0] = Object.assign({}, o, { linha: l }); }
-    if (fn === 'excluirLancamento' && Number(args[0]) < 0) { const l = await VOO[Number(args[0])]; if (!l) return { ok: true }; args[0] = l; }
+    if (fn === 'salvarLancamento' && Number(o.linha) < 0) { const l = await real(Number(o.linha)); if (!l) throw new Error('o lançamento não chegou à planilha'); args[0] = Object.assign({}, args[0], { linha: l }); }
+    if (fn === 'excluirLancamento' && Number(args[0]) < 0) { const l = await real(Number(args[0])); if (!l) return { ok: true }; args[0] = l; }
     if (fn === 'restaurarLancamentos' && Array.isArray(args[0])) {
-      args[0] = (await Promise.all(args[0].map(async x => Number(x.linha) < 0 ? Object.assign({}, x, { linha: await VOO[Number(x.linha)] }) : x))).filter(x => x.linha);
+      args[0] = (await Promise.all(args[0].map(async x => Number(x.linha) < 0 ? Object.assign({}, x, { linha: await real(Number(x.linha)) }) : x))).filter(x => x.linha);
       if (!args[0].length) return { ok: true };
     }
+    // sem internet: vai para a fila do celular, com a mesma etiqueta
+    const paraFila = () => { const r = enfileirar(fn, args, { etq, tmp, antes }); if (novo) fim('fila'); return r; };
+    const lPos = fn === 'excluirLancamento' ? Number(args[0]) : fn === 'salvarLancamento' ? Number(args[0].linha) : 0;
+    if (filaAtiva() && (NAT.off || (lPos > 0 && filaDaLinha(lPos)))) return paraFila();   // com algo da mesma linha na fila: vai atrás, na ordem
     const fora = fn === 'excluirLancamento' ? [Number(args[0])] : fn === 'restaurarLancamentos' ? args[0].filter(x => x.excluir).map(x => Number(x.linha)) : [];
     fora.forEach(l => { RAP.tirando[l] = (RAP.tirando[l] || 0) + 1; });      // leituras que chegarem antes do fim não trazem de volta
     const solta = () => fora.forEach(l => { if (!--RAP.tirando[l]) delete RAP.tirando[l]; });
     const alvo = ed ? Number(o.linha) : Number(args[0] && args[0].linha) > 0 ? Number(args[0].linha) : 0;
     try {
-      const env = await enviar(fn, args, fn === 'salvarLancamento' ? ['item', 'painel'] : ['painel'], tmp || alvo);
+      const env = await enviar(fn, args, fn === 'salvarLancamento' ? ['item', 'painel'] : ['painel'], tmp || alvo, etq);
       const r = env.r;
-      if (env.dados) { DADOS = env.dados; S.falha = ''; clearTimeout(NAT.wt); NAT.wt = setTimeout(natWidget, 300); }
+      if (env.dados) { DADOS = env.dados; S.falha = ''; filaDepoisDeDados(); clearTimeout(NAT.wt); NAT.wt = setTimeout(natWidget, 300); }
       const it = env.item ? expMov({ itens: [env.item] })[0] : null;
       if (novo) { const l = r && r.linha; fim(l || 0); if (VOO_FORA[tmp]) tirarLocal(tmp); else if (it) trocarItem(tmp, it); else if (l) marcarLocal(tmp, { linha: l, pend: '' }); else tirarLocal(tmp); }
       else if (fn === 'salvarLancamento') { const l = Number(args[0].linha); if (it) trocarItem(l, it); else marcarLocal(l, { pend: '' }); }
@@ -3106,6 +3149,7 @@ function gasto(fn, ...args) {
       fora.forEach(tirarLocal); solta();
       set(); return r;
     } catch (e) {
+      if (filaAtiva() && e && e.semRede) { solta(); return paraFila(); }  // a internet caiu no meio do envio
       if (novo) { fim(0); tirarLocal(tmp); } else if (ed) marcarLocal(Number(o.linha), { pend: '' });
       else if (fn === 'restaurarLancamentos' && Array.isArray(args[0])) args[0].forEach(x => marcarLocal(Number(x.linha), { pend: '' }));
       solta();
@@ -3162,6 +3206,303 @@ function temposCelular() {
   }
   return it;
 }
+
+// ------------------------------------------------ v7.2.2: gastos sem internet (fila no celular) e Painel estimado
+// Gasto novo, edição, exclusão, duplicar, desfazer e "pretendo gastar" feitos sem internet vão para uma fila guardada
+// no celular, cada um com a sua etiqueta única. A fila sai sozinha quando a conexão volta: pelo app, se ele estiver
+// aberto, ou pelo Android (cópia da fila no lado nativo), mesmo com o app fechado. A planilha ignora etiqueta repetida.
+// Enquanto houver fila, o Painel mostra os números estimados no celular, pela regra do gasto do dia da 7.2.1.
+const FL = { itens: [], env: false, mapa: {}, tmps: {}, prom: null };
+(function () { try { FL.itens = JSON.parse(localStorage.getItem(CV + 'fila') || '[]') || []; } catch (e) { FL.itens = []; } })();
+TMP = Math.min(TMP, ...FL.itens.map(x => Number(x.tmp) || 0)) - 1;     // linhas provisórias novas não repetem as da fila
+const TIRADOS = {}, ANTES = {};
+const PDG = { env: 'enviando…', esp: 'aguardando a planilha', fila: 'no celular, espera a internet', erro: 'não foi para a planilha' };                                          // lançamento como estava antes de excluir / editar
+const filaAtiva = () => !!(NAT.app || NAT.simula);                       // só no app Android (e na prévia que o simula)
+const filaN = () => FL.itens.filter(x => !x.erro).length;
+const naFila = (l) => FL.itens.find(x => x.tmp && x.tmp === l);
+const ehFila = (l) => (l = Number(l)) < 0 && !FL.mapa[l] && !!(naFila(l) || FL.tmps[l]);
+const filaDaLinha = (l, fn) => FL.itens.find(x => !x.tmp && !x.erro && (fn ? x.fn === fn : true) && (x.fn === 'excluirLancamento' ? Number(x.args[0]) : Number(x.args[0] && x.args[0].linha)) === l);
+const filaTira = (l) => !!filaDaLinha(l, 'excluirLancamento');
+function guardarAntes(l) { if (l > 0 && !ANTES[l] && !filaDaLinha(l, 'salvarLancamento')) { const x = acharLanc(l); if (x) ANTES[l] = Object.assign({}, x); } }
+function antesDe(l) { const q = filaDaLinha(l, 'salvarLancamento'), a = ANTES[l]; delete ANTES[l]; return q ? q.antes : (a || Object.assign({}, acharLanc(l) || {})); }
+function gravarFila() {
+  try { localStorage.setItem(CV + 'fila', JSON.stringify(FL.itens)); } catch (e) {}
+  const p = typeof FZP === 'function' ? FZP() : null;                // cópia para o Android enviar com o app fechado
+  if (NAT.app && p && p.fila) p.fila({ itens: FL.itens.filter(x => !x.erro).map(x => ({ etq: x.etq, fn: x.fn, args: x.args, quando: x.quando })) }).catch(() => {});
+}
+// o que o Android já enviou (ou a planilha recusou) enquanto o app estava fechado
+async function reconciliarFila() {
+  const p = typeof FZP === 'function' ? FZP() : null;
+  if (!NAT.app || !p || !p.filaEstado || !FL.itens.length) return;
+  let e = null; try { e = await p.filaEstado({ limpar: true }); } catch (x) { return; }
+  const feitos = (e && e.feitos) || {}, erros = (e && e.erros) || {};
+  let mudou = 0;
+  FL.itens.slice().forEach(it => {
+    if (feitos[it.etq]) {
+      const r = feitos[it.etq].r;
+      FL.itens = FL.itens.filter(y => y !== it); mudou++;
+      if (it.tmp) { if (r && r.linha) { FL.mapa[it.tmp] = r.linha; marcarLocal(it.tmp, { linha: r.linha, pend: '' }); } else tirarLocal(it.tmp); }
+      else if (it.fn === 'salvarLancamento') marcarLocal(Number(it.args[0].linha), { pend: '' });
+    } else if (erros[it.etq] && !it.erro) { it.erro = String(erros[it.etq]); mudou++; if (it.tmp) marcarLocal(it.tmp, { pend: 'erro' }); }
+  });
+  if (mudou) { gravarFila(); estimarPainel(); set(); if (!NAT.off) atualizarPainel(); }
+}
+
+// guarda na fila. Gasto novo leva a origem "App · offline" (a importação compara com ele).
+function enfileirar(fn, args, q) {
+  const o = args[0] || {}, novo = fn === 'salvarLancamento' && !o.linha, l = Number(fn === 'excluirLancamento' ? args[0] : o.linha) || 0;
+  if (novo) args[0] = Object.assign({}, o, { origem: o.origem || 'App · offline' });
+  const ex = fn === 'excluirLancamento' ? Object.assign({}, TIRADOS[l] || acharLanc(l) || {}, { linha: l }) : null;
+  if (ex) delete TIRADOS[l];
+  const desc = fn === 'excluirLancamento' ? (ex.desc || 'Lançamento') : fn === 'salvarGastoInformado' ? 'Pretendo gastar ' + dBr(args[0]) : fn === 'restaurarLancamentos' ? 'Desfazer' : o.desc || curto(o.cat);
+  const valor = fn === 'salvarLancamento' ? numBR(o.valor) || 0 : fn === 'salvarGastoInformado' ? numBR(args[1]) || 0 : ex ? Number(ex.valor) || 0 : 0;
+  const ja = fn === 'salvarLancamento' && l > 0 ? filaDaLinha(l, 'salvarLancamento') : fn === 'salvarGastoInformado' ? FL.itens.find(x => x.fn === fn && x.args[0] === args[0] && !x.erro) : null;
+  if (ja) Object.assign(ja, { etq: q.etq, args, desc, valor, quando: ja.quando });   // a mesma linha editada de novo: vale a última versão
+  else FL.itens.push({ etq: q.etq, fn, args, tmp: q.tmp || 0, antes: q.antes || null, ex, desc, valor, quando: Date.now() });
+  if (q.tmp) { FL.tmps[q.tmp] = 1; marcarLocal(q.tmp, { pend: 'fila' }); }
+  else if (fn === 'salvarLancamento' && l > 0) marcarLocal(l, { pend: 'fila' });
+  gravarFila(); estimarPainel(); set();
+  if (!NAT.off) setTimeout(enviarFila, 50);
+  return { fila: true, linha: q.tmp || (fn === 'salvarLancamento' ? l : 0) };
+}
+
+// ações sobre um gasto que está na fila (ou sobre uma linha da planilha com ação na fila): resolvidas no próprio celular
+async function filaLocal(fn, args) {
+  const toca = fn === 'salvarLancamento' ? [args[0].linha] : fn === 'excluirLancamento' ? [args[0]] : fn === 'restaurarLancamentos' && Array.isArray(args[0]) ? args[0].map(x => x.linha) : [];
+  const temPos = (l) => Number(l) > 0 && !!filaDaLinha(Number(l));
+  if (!toca.some(l => ehFila(l) || temPos(l))) return null;
+  if (FL.prom) await FL.prom;                                           // a fila está saindo: espera terminar
+  await reconciliarFila();
+  if (fn === 'salvarLancamento' && ehFila(args[0].linha)) {
+    const tmp = Number(args[0].linha), it = naFila(tmp);
+    if (!it) return { ok: true };
+    it.args[0] = Object.assign({}, args[0], { linha: '', origem: it.args[0].origem }); it.desc = args[0].desc || it.desc; it.valor = numBR(args[0].valor) || 0;
+    it.etq = novaEtq(); delete it.erro;
+    tirarLocal(tmp); porNaLista(itemLocal(it.args[0], tmp, 'fila')); gravarFila(); estimarPainel(); set();
+    if (!NAT.off) setTimeout(enviarFila, 50);
+    return { fila: true, linha: tmp };
+  }
+  if (fn === 'excluirLancamento' && ehFila(args[0])) {
+    const tmp = Number(args[0]);
+    FL.itens = FL.itens.filter(x => x.tmp !== tmp); tirarLocal(tmp); gravarFila(); estimarPainel(); set();
+    return { ok: true };
+  }
+  if (fn === 'restaurarLancamentos' && Array.isArray(args[0])) {
+    const feitos = [];
+    args[0].forEach(x => {
+      const l = Number(x.linha);
+      if (ehFila(l)) {
+        feitos.push(x);
+        if (x.excluir) { FL.itens = FL.itens.filter(y => y.tmp !== l); tirarLocal(l); return; }
+        // desfazer uma edição ou exclusão de um gasto da fila: ele volta para a fila como estava
+        const o = Object.assign({}, x, { linha: '', valor: br(x.valor), terceiros: x.terceiros === '' || x.terceiros == null ? '' : br(x.terceiros) });
+        const it = naFila(l);
+        if (it) { it.args[0] = Object.assign(o, { origem: it.args[0].origem }); it.desc = o.desc || it.desc; it.valor = numBR(o.valor) || 0; it.etq = novaEtq(); }
+        else FL.itens.push({ etq: novaEtq(), fn: 'salvarLancamento', args: [Object.assign(o, { origem: 'App · offline' })], tmp: l, desc: o.desc || curto(o.cat), valor: numBR(o.valor) || 0, quando: Date.now() });
+        tirarLocal(l); porNaLista(itemLocal(o, l, 'fila'));
+        return;
+      }
+      if (l > 0 && !x.excluir) {
+        // desfazer a exclusão ou a edição de um lançamento da planilha que ainda não saiu: basta tirar da fila
+        const del = filaDaLinha(l, 'excluirLancamento'), ed = filaDaLinha(l, 'salvarLancamento');
+        if (del) { feitos.push(x); FL.itens = FL.itens.filter(y => y !== del); tirarLocal(l); porNaLista(Object.assign({}, del.ex, { pend: '' })); return; }
+        if (ed) { feitos.push(x); FL.itens = FL.itens.filter(y => y !== ed); tirarLocal(l); porNaLista(Object.assign({}, ed.antes && ed.antes.linha ? ed.antes : itemLocal(x, l, ''), { pend: '' })); }
+      }
+    });
+    if (!feitos.length) return null;
+    gravarFila(); estimarPainel(); set();
+    const resto = args[0].filter(x => feitos.indexOf(x) < 0).map(x => Number(x.linha) < 0 && FL.mapa[Number(x.linha)] ? Object.assign({}, x, { linha: FL.mapa[Number(x.linha)] }) : x);
+    if (!resto.length) return { ok: true };
+    args[0] = resto; return null;
+  }
+  return null;                                                          // edição ou exclusão de linha da planilha com algo na fila: gasto() manda para a fila
+}
+
+// envia a fila em ordem quando a conexão volta (ou ao tocar em "Enviar agora")
+function enviarFila() {
+  if (FL.prom) { FL.denovo = 1; return FL.prom; }
+  if (NAT.off || !filaN()) return Promise.resolve();
+  FL.prom = enviarFila0_().catch(e => registrarErroApp('fila', e)).finally(() => {
+    FL.prom = null; FL.env = false; set();
+    if (FL.denovo) { FL.denovo = 0; if (filaN() && !NAT.off) setTimeout(enviarFila, 50); }
+  });
+  return FL.prom;
+}
+async function enviarFila0_() {
+  FL.env = true; set();
+  await reconciliarFila();
+  let ok = 0, dados = null; const tentados = new Set();
+  for (;;) {
+    const it = FL.itens.find(x => !x.erro && !tentados.has(x));      // na ordem; o que entrar na fila durante o envio vai junto
+    if (!it || NAT.off) break;
+    tentados.add(it);
+    if (it.tmp) marcarLocal(it.tmp, { pend: 'env' }); set();
+    try {
+      const env = await enviar(it.fn, it.args, it.fn === 'salvarLancamento' ? ['item', 'painel'] : ['painel'], it.tmp, it.etq);
+      const r = env.r; if (env.dados) dados = env.dados;
+      FL.itens = FL.itens.filter(x => x !== it); ok++;
+      if (it.tmp) {
+        const l = r && r.linha, novo = env.item ? expMov({ itens: [env.item] })[0] : null;
+        if (l) { FL.mapa[it.tmp] = l; if (novo) trocarItem(it.tmp, novo); else marcarLocal(it.tmp, { linha: l, pend: '' }); } else tirarLocal(it.tmp);
+      } else if (it.fn === 'salvarLancamento' && Number(it.args[0].linha) > 0) marcarLocal(Number(it.args[0].linha), { pend: '' });
+    } catch (e) {
+      if (e && e.semRede) { if (it.tmp) marcarLocal(it.tmp, { pend: 'fila' }); break; }
+      it.erro = String(e && e.message || e); if (it.tmp) marcarLocal(it.tmp, { pend: 'erro' });
+    }
+    gravarFila(); set();
+  }
+  FL.env = false;
+  if (dados) { DADOS = dados; S.falha = ''; filaDepoisDeDados(); } else estimarPainel();   // sem resposta nova: refaz sobre a mesma base
+  gravarFila(); set();
+  if (ok) { toast(ok === 1 ? 'Gasto enviado para a planilha' : ok + ' gastos enviados para a planilha'); atualizarPainel(); }
+  if (FL.itens.some(x => x.erro) && !(S.sheet === 'gen' && /^fila/.test(S.gk || ''))) setTimeout(() => abrirG('filaErro'), ok ? 1200 : 200);
+  clearTimeout(NAT.wt); NAT.wt = setTimeout(natWidget, 300);
+}
+
+// ---------- Painel estimado: aplica a fila aos últimos números da planilha, com a regra do gasto do dia
+// À vista conta inteiro no dia, na semana e no mês; parcelado só a 1ª parcela no dia da compra (as outras saem do livre
+// dos meses em que caem); categoria reservada só o que passar do que resta da reserva; recorrente sai só do livre do mês.
+function efeitoGasto(x, ctx, conhecido) {
+  const z = { data: '', dia: 0, mes: 0 };
+  if (!x) return z;
+  if (x.status === 'Cancelado' || x.status === 'Duplicado – ignorar') return z;
+  const v = numBR(String(x.valor ?? '')) || 0, t = numBR(String(x.terceiros ?? '')) || 0, sp = typeof x.suaParte === 'number' ? x.suaParte : v - t;
+  const tipo = x.tipo || 'Único', data = String(x.data || ''), m = data.slice(0, 7), mAt = ctx.mAt;
+  const pa = Number(x.parcAtual || x.pa) || 1, pt = Number(x.parcTotal || x.parc) || 1;
+  const ini = x.mesIni || (tipo === 'Parcelado' ? addMes(m, pa - 1) : m), fim = x.mesFim || (tipo === 'Parcelado' ? addMes(m, pt - 1) : tipo === 'Recorrente' ? (x.recAte || '9999-12') : m);
+  if (!(ini && ini <= mAt && mAt <= fim)) return z;
+  const doDia = tipo === 'Único' || (tipo === 'Parcelado' && pa <= 1 && m === mAt);
+  const res = (LISTAS && LISTAS.reservadas || []).includes(x.cat);
+  if (conhecido) {                                             // lançamento que já estava na planilha (antes da edição ou excluído)
+    const dl = x.diaLimite === null || x.diaLimite === undefined ? (res ? 0 : doDia ? sp : 0) : Number(x.diaLimite) || 0;
+    if (res && ctx.resta[x.cat] !== undefined) ctx.resta[x.cat] += Math.max(0, sp - dl);   // devolve à reserva o que tinha saído dela
+    return { data, dia: doDia ? dl : 0, mes: res ? dl : sp };
+  }
+  if (res) {
+    const r = ctx.resta[x.cat];
+    if (r === undefined) return z;
+    const exc = Math.max(0, sp - r); ctx.resta[x.cat] = Math.max(0, r - sp);
+    return { data, dia: doDia ? exc : 0, mes: exc };
+  }
+  return { data, dia: doDia ? sp : 0, mes: sp };
+}
+function estimarPainel() {
+  if (!DADOS || !DADOS.hoje) return;
+  if (!filaN()) { if (NAT.base) { Object.assign(DADOS, NAT.base); NAT.base = null; } NAT.estimado = false; return; }
+  if (!NAT.base) NAT.base = JSON.parse(JSON.stringify({ hoje: DADOS.hoje, semanaTotal: DADOS.semanaTotal, semana: DADOS.semana }));
+  const b = NAT.base, h = Object.assign({}, b.hoje), t = Object.assign({}, b.semanaTotal), hj = hojeIso(), mAt = mesAtual();
+  const sem = (b.semana || []).map(s => Object.assign({}, s)), ctx = { mAt, resta: Object.assign({}, (LISTAS && LISTAS.resta) || {}) };
+  const noMes = sem.filter(s => s.data && s.situacao !== 'Fora do mês'), ini = (noMes[0] || {}).data || hj, fimS = (noMes[noMes.length - 1] || {}).data || hj;
+  const porDia = {}; let dHoje = 0, dSem = 0, dMes = 0;
+  const aplica = (e, sinal) => {
+    if (!e) return;
+    dMes += e.mes * sinal;
+    if (e.dia) { if (e.data === hj) dHoje += e.dia * sinal; if (e.data >= ini && e.data <= fimS) dSem += e.dia * sinal; porDia[e.data] = (porDia[e.data] || 0) + e.dia * sinal; }
+  };
+  FL.itens.forEach(it => {
+    if (it.erro) return;
+    if (it.fn === 'salvarLancamento') {
+      if (it.antes) aplica(efeitoGasto(it.antes, ctx, true), -1);
+      aplica(efeitoGasto(it.args[0], ctx, false), 1);
+    } else if (it.fn === 'excluirLancamento' && it.ex && it.ex.desc) aplica(efeitoGasto(it.ex, ctx, true), -1);
+  });
+  const diasRest = Math.max(1, nTxt(h.diasRestantes) || Number(h.diasRestantes) || 1);
+  const resto = (dMes - dHoje) / diasRest;                     // o que não é de hoje se espalha pelos dias que faltam
+  const lim = nTxt(h.limiteHoje) - resto, gastoH = nTxt(h.gastoHoje) + dHoje;
+  const pode = Math.max(0, lim - gastoH);
+  h.podeHojeNum = pode; h.podeHoje = fm(pode); h.limiteHoje = fm(lim); h.gastoHoje = fm(gastoH);
+  h.livreMes = fm(nTxt(h.livreMes) - dMes); if (h.amanha !== undefined && h.amanha !== '') h.amanha = fm(nTxt(h.amanha) - resto);
+  // semana: orçamento = (livre + gasto da semana) × dias da semana no mês ÷ dias até o fim do mês
+  const eom = isoDia(mAt, diasNoMes(mAt)), a5 = ini > mAt + '-01' ? ini : mAt + '-01', dd = (x, y) => Math.round((new Date(y + 'T12:00:00') - new Date(x + 'T12:00:00')) / 864e5) + 1;
+  const k = noMes.length ? dd(a5, fimS) / dd(a5, eom) : 0, dOrc = (dSem - dMes) * k;
+  // "pretendo gastar" na fila: o dia passa a considerar o maior entre o informado e o lançado
+  const inf = {}; FL.itens.forEach(it => { if (!it.erro && it.fn === 'salvarGastoInformado') inf[it.args[0]] = String(it.args[1] ?? '').trim(); });
+  let dCons = 0;
+  sem.forEach(s => {
+    const lan0 = nTxt(s.lancado), lan = lan0 + (porDia[s.data] || 0), c0 = nTxt(s.considerado);
+    if (inf[s.data] !== undefined) { const v = numBR(inf[s.data]); s.informado = isNaN(v) ? '' : v; s.informadoTxt = isNaN(v) ? '' : fm(v); }
+    if (porDia[s.data] || inf[s.data] !== undefined) {
+      const c1 = s.informado !== '' && s.informado != null ? Math.max(Number(s.informado) || 0, lan) : (inf[s.data] !== undefined ? lan : c0 + (porDia[s.data] || 0));
+      s.lancado = fm(lan); s.considerado = fm(c1); if (s.situacao !== 'Fora do mês') dCons += c1 - c0;
+    }
+    if (s.data > hj && s.situacao !== 'Fora do mês' && s.limite !== '' && resto) s.limite = fm(nTxt(s.limite) - resto);
+  });
+  t.limite = fm(nTxt(t.limite) + dOrc); t.lancado = fm(nTxt(t.lancado) + dSem); t.considerado = fm(nTxt(t.considerado) + dCons); t.restante = fm(nTxt(t.restante) + dOrc - dCons);
+  h.semana = fm(nTxt(h.semana) + dOrc - dCons);
+  DADOS.hoje = h; DADOS.semanaTotal = t; DADOS.semana = sem;
+  NAT.estimado = true;
+  clearTimeout(NAT.wt); NAT.wt = setTimeout(natWidget, 300);
+}
+// quando a planilha manda números novos, eles viram a base; se ainda houver fila, a estimativa é refeita sobre eles
+function filaDepoisDeDados() { NAT.base = null; if (filaN()) estimarPainel(); else NAT.estimado = false; }
+
+// a lista do mês chegou da planilha: os gastos que ainda estão na fila continuam aparecendo nela
+// (e o que está na fila para sair ou mudar continua fora ou com a versão nova)
+function filaNaLista() {
+  FL.itens.forEach(it => {
+    const pend = it.erro ? 'erro' : 'fila';
+    if (it.fn === 'salvarLancamento') {
+      const l = it.tmp || Number(it.args[0].linha);
+      if (!l || FL.mapa[l]) return;
+      const x = acharLanc(l);
+      if (!x || x.pend !== pend || !it.tmp) { tirarLocal(l); porNaLista(itemLocal(it.args[0], l, pend)); }
+    } else if (it.fn === 'excluirLancamento' && !it.erro) tirarLocal(Number(it.args[0]));
+  });
+}
+
+// ---------- janelas da fila (como no protótipo)
+GS.fila = () => {
+  const its = FL.itens;
+  return { tit: its.length === 1 ? '1 gasto para enviar' : its.length + ' gastos para enviar', sh: [
+    its.length ? bk('List', { items: its.map(it => { const a = icDe(it.args[0] && it.args[0].cat || (it.ex && it.ex.cat) || 'Outros');
+      return L(a[1], ih(a[0]), (it.fn === 'excluirLancamento' ? 'Excluir: ' : it.fn === 'salvarLancamento' && it.args[0].linha ? 'Editar: ' : '') + it.desc,
+        it.erro ? 'não foi: ' + it.erro : (it.fn === 'salvarGastoInformado' ? 'na semana' : dBr(it.args[0].data || (it.ex && it.ex.data) || '')) + ' · ' + (NAT.off ? 'espera a internet' : FL.env ? 'enviando…' : 'na fila'),
+        it.valor ? fm(it.valor) : '', it.erro ? 'falhou' : 'tocar para abrir', () => abrirDaFila(it), { vcls: it.erro ? '' : 'warn' }); }) })
+      : bk('Txt', { t: 'Nada para enviar: tudo já está na planilha.' }),
+    bk('Pv', { cls: NAT.off ? 'neu' : 'ok', t: NAT.off ? 'Sem internet. Os gastos ficam guardados neste celular e vão sozinhos para a planilha quando a conexão voltar.' : 'Com internet: os gastos são enviados agora.' }),
+    its.length && !NAT.off ? bk('Btn', { t: FL.env ? 'Enviando…' : 'Enviar agora', dis: FL.env, a: () => { okJanela(); enviarFila(); } }) : null,
+    bk('Btn2', { t: 'Fechar', a: fecharSheet })
+  ] };
+};
+GS.filaErro = () => {
+  const it = FL.itens.find(x => x.erro);
+  if (!it) return { tit: 'Tudo enviado', sh: [bk('Txt', { t: 'Nenhum gasto com problema.' }), bk('Btn2', { t: 'Fechar', a: fecharSheet })] };
+  return { tit: 'Um gasto não foi enviado', sh: [
+    bk('List', { items: [Lcat(it.args[0] && it.args[0].cat || 'Outros', it.desc, dBr(it.args[0] && it.args[0].data || ''), it.valor ? fm(it.valor) : '', '', null)] }),
+    bk('Pv', { cls: 'bad', t: 'A planilha respondeu: ' + it.erro }),
+    bk('Btn', { t: 'Tentar de novo', a: () => { delete it.erro; if (it.tmp) marcarLocal(it.tmp, { pend: 'fila' }); gravarFila(); okJanela(); enviarFila(); } }),
+    it.fn === 'salvarLancamento' ? bk('Btn2', { t: 'Editar e enviar', a: () => {
+      // gasto novo continua na fila (com o erro) até ser salvo de novo; edição de lançamento da planilha sai da fila e abre a janela de edição
+      const l = it.tmp || Number(it.args[0].linha);
+      if (!it.tmp) { FL.itens = FL.itens.filter(x => x !== it); gravarFila(); marcarLocal(l, { pend: '' }); }
+      fecharSheet(); setTimeout(() => editarGasto(l), reduz() ? 0 : 300); } }) : null,
+    bk('Del', { t: it.fn === 'salvarLancamento' && !it.tmp ? 'Descartar esta alteração' : it.fn === 'excluirLancamento' ? 'Manter o lançamento' : 'Descartar este gasto', a: () => {
+      FL.itens = FL.itens.filter(x => x !== it); gravarFila();
+      if (it.tmp) tirarLocal(it.tmp);
+      else if (it.fn === 'salvarLancamento' && it.antes && it.antes.linha) { tirarLocal(it.antes.linha); porNaLista(Object.assign({}, it.antes, { pend: '' })); }   // volta como está na planilha
+      else if (it.fn === 'excluirLancamento' && it.ex && it.ex.desc) porNaLista(Object.assign({}, it.ex, { pend: '' }));
+      estimarPainel(); set(); okJanela(it.fn === 'excluirLancamento' ? 'Lançamento mantido' : 'Descartado'); } })
+  ] };
+};
+// tocar num item da janela da fila: gasto novo ou editado abre a janela de edição; exclusão pode ser desfeita; "pretendo gastar" abre a Semana
+function abrirDaFila(it) {
+  if (it.erro) { trocarG('filaErro'); return; }
+  if (it.fn === 'salvarLancamento') { const l = it.tmp || Number(it.args[0].linha); fecharSheet(); setTimeout(() => editarGasto(l), reduz() ? 0 : 280); return; }
+  if (it.fn === 'excluirLancamento') { trocarG('filaExc', { it }); return; }
+  if (it.fn === 'salvarGastoInformado') { fecharSheet(); setTimeout(() => go('semana'), reduz() ? 0 : 280); }
+}
+GS.filaExc = (p) => {
+  const it = p.it, x = it.ex || {};
+  return { tit: 'Exclusão na fila', sh: [
+    bk('List', { items: [Lcat(x.cat || 'Outros', x.desc || it.desc, dBr(x.data || ''), it.valor ? fm(it.valor) : '', '', null)] }),
+    bk('Pv', { cls: 'neu', t: 'Este lançamento sai da planilha quando a internet voltar. Se mudou de ideia, desfaça agora.' }),
+    bk('Btn', { t: 'Desfazer a exclusão', a: () => {
+      FL.itens = FL.itens.filter(y => y !== it); gravarFila();
+      if (x.linha && x.desc) porNaLista(Object.assign({}, x, { pend: '' }));
+      estimarPainel(); set(); okJanela('Exclusão desfeita'); } }),
+    bk('Btn2', { t: 'Voltar à fila', a: () => trocarG('fila') })
+  ] };
+};
 
 // ------------------------------------------------ v7.0: app Android · voltar com prévia, compartilhar para "A importar",
 // atualização pelo app, primeira abertura (conectar), sem internet, vibração e barra de status.
@@ -3540,9 +3881,22 @@ function mudarConexao(on_) {
   if (on_ === !NAT.off) return;
   NAT.off = !on_;
   if (NAT.off) { const d = new Date(); NAT.offDesde = (DADOS && String(DADOS.atualizado || '').slice(-5)) || (String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')); toast('Sem internet: mostrando os dados das ' + NAT.offDesde); }
-  else { toast('Conexão de volta'); if (NAT.conectado && typeof sincronizar === 'function') setTimeout(sincronizar, 300); }
+  else {
+    // v7.2.2: com gastos na fila, eles saem primeiro; a atualização vem com a resposta do último
+    toast(filaN() ? 'Conexão de volta: enviando ' + (filaN() === 1 ? '1 gasto' : filaN() + ' gastos') : 'Conexão de volta');
+    if (NAT.conectado) setTimeout(() => { if (filaN()) enviarFila(); else if (typeof sincronizar === 'function') sincronizar(); }, 300);
+  }
   set();
 }
+// v7.2.2: o Android avisa na hora quando a rede cai ou volta (mais confiável que os eventos do navegador)
+window.fzRede = (on_) => { clearTimeout(NAT.rt); if (on_) mudarConexao(true); else NAT.rt = setTimeout(() => mudarConexao(false), 1500); };   // troca de Wi-Fi para dados não pisca
+// app voltou para a tela: lê o que o Android enviou com o app fechado e confere a conexão
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !NAT.app || !NAT.conectado) return;
+  const p = FZP();
+  if (p) p.info().then(i => { if (i && typeof i.rede === 'boolean') mudarConexao(i.rede); }).catch(() => {});
+  reconciliarFila().then(() => { if (!NAT.off && filaN()) enviarFila(); });
+});
 
 // ---------- transporte no APK: API do Apps Script (doPost) com a chave deste celular
 async function chamarApi(fn, args, op) {          // op (v7.2.0): { etq, extra, tent } → devolve a resposta inteira
@@ -3582,7 +3936,7 @@ function natIniciar() {                        // chamada em iniciar(): no naveg
   Servidor.chamar = function (fn, args) { return chamarApi(fn, args); };
   NAT.ponte.vibrar = (ms) => { const p = FZP(); if (p) p.vibrar({ ms }).catch(() => {}); };
   const p = FZP();
-  if (p) p.info().then(i => { NAT.versao = i.versao || NAT.versao; NAT.aparelho = i.aparelho || NAT.aparelho; if (i.sat != null) fzInsets(i.sat, i.sab); set(); }).catch(() => {});
+  if (p) p.info().then(i => { NAT.versao = i.versao || NAT.versao; NAT.aparelho = i.aparelho || NAT.aparelho; if (i.sat != null) fzInsets(i.sat, i.sab); if (typeof i.rede === 'boolean' && lerCred()) mudarConexao(i.rede); set(); }).catch(() => {});
   if (NAT.ins) fzInsets(NAT.ins.t, NAT.ins.b);
   natTema(temaEf());
   window.addEventListener('online', () => mudarConexao(true));
@@ -3592,6 +3946,8 @@ function natIniciar() {                        // chamada em iniciar(): no naveg
   setTimeout(fzRecebidos, 700);
   setTimeout(() => procurarAtualizacao(false), 3000);
   natCred(); natAgenda();
+  // v7.2.2: gastos que ficaram na fila: o que o Android já mandou sai dela; o resto vai agora, se houver internet
+  if (FL.itens.length) setTimeout(() => reconciliarFila().then(() => { if (!NAT.off && filaN()) enviarFila(); }), 1200);
   if (p) setTimeout(() => p.destino().then(r => { if (r && r.dest) abrirDestino(r.dest); }).catch(() => {}), 900);
   if (!PREF('notifPerguntado', false)) setTimeout(() => { if (!S.sheet && !notifOn()) { setPref('notifPerguntado', true); abrirG('notifGuia'); } }, 6000);
   return true;
@@ -3605,12 +3961,14 @@ const PREF = (k, pad) => { try { const v = localStorage.getItem(CV + k); return 
 const setPref = (k, v) => { try { localStorage.setItem(CV + k, v ? '1' : '0'); } catch (e) {} };
 function notifOn() { return PREF('notif', false); }
 function lembreteOn() { return PREF('lembrete', false); }
+function domingoOn() { return PREF('domingo', true); }
 function emailsOn() { return !(AJ && AJ.cfg && AJ.cfg.emails === false); }
 function alternarNotif() {
   if (!notifOn()) { natEstadoGuia().then(() => abrirG('notifGuia')); return; }
   setPref('notif', false); vib(8); set(); toast('Notificações desligadas');
   natAgenda();
 }
+function alternarDomingo() { const v = !domingoOn(); setPref('domingo', v); vib(8); set(); toast(v ? 'Lembrete de domingo ligado: por volta das 12h' : 'Lembrete de domingo desligado'); natAgenda(); }
 function alternarLembrete() { const v = !lembreteOn(); setPref('lembrete', v); vib(8); set(); toast(v ? 'Lembrete ligado: às 18h, se nada foi lançado' : 'Lembrete desligado'); natAgenda(); }
 function alternarEmails() {
   const v = !emailsOn(); vib(8);
@@ -3655,6 +4013,7 @@ function abrirDestino(dest) {
     else if (k === 'venc' || k === 'imp' || k === 'pend' || k === 'rev') abrirSub(k);
     else if (k === 'resumo') { go('painel'); setTimeout(() => abrirResumo(''), 250); }
     else if (k === 'lancar') { const at = atalhosLista(), q = arg ? at.find(a => a.cat === arg) : null; abrirLancar(q ? { atalho: q } : undefined); }
+    else if (k === 'fila') { go('painel'); setTimeout(() => abrirG(FL.itens.some(x => x.erro) ? 'filaErro' : 'fila'), 250); }
     else if (k === 'importar') { go('mais'); setTimeout(() => abrirSub('imp'), 200); if (NAT.app && FZP()) FZP().escolherArquivos().then(r => { if (r && r.arqs && r.arqs.length) receberArquivos(r.arqs); }).catch(() => {}); else if (NAT.ponte.escolherArquivos) NAT.ponte.escolherArquivos(); }
     else go('painel');
   }, S.sheet ? t : 0);
@@ -3685,14 +4044,15 @@ function natWidget() {
   const h = DADOS.hoje || {}, s = semInfo(), at = atalhosLista().slice(0, 3);
   const pode = typeof h.podeHojeNum === 'number' ? h.podeHojeNum : nTxt(h.podeHoje), gasto = nTxt(h.gastoHoje), lim = nTxt(h.limiteHoje);
   const w = { pode, gasto, lim, semana: s.rest, livre: nTxt(h.livreMes), oculto: !!S.hide, dentro: pode >= -0.004,
-    atalhos: at.map(q => { const a = icDe(q.cat); return { cat: q.cat, nome: curto(q.cat), cor: a[1], ic: a[0] }; }), quando: String(DADOS.atualizado || '').slice(-5) };
+    atalhos: at.map(q => { const a = icDe(q.cat); return { cat: q.cat, nome: curto(q.cat), cor: a[1], ic: a[0] }; }), quando: String(DADOS.atualizado || '').slice(-5),
+    estimado: !!NAT.estimado, fila: typeof filaN === 'function' ? filaN() : 0 };
   const p = FZP(); if (NAT.app && p) p.widget({ dados: w }).catch(() => {});
   if (NAT.ponte.widget) NAT.ponte.widget(w);
   return w;
 }
 // avisa o lado nativo das escolhas (para o agendamento das 12h, 18h e 0h)
 function natAgenda() {
-  const o = { notif: notifOn(), lembrete: lembreteOn() };
+  const o = { notif: notifOn(), lembrete: lembreteOn(), domingo: domingoOn() };
   const p = FZP(); if (NAT.app && p) p.agenda(o).catch(() => {});
   if (NAT.ponte.agenda) NAT.ponte.agenda(o);
 }
@@ -3729,9 +4089,10 @@ async function acao(fn, msg, depois_) {
 function aplicarTudo(t) {
   if (t.listas) LISTAS = t.listas;
   if (t.dados) { DADOS = t.dados; S.falha = ''; }
+  if (typeof filaDepoisDeDados === 'function') { if (t.dados) filaDepoisDeDados(); else if (t.listas) estimarPainel(); }   // v7.2.2: com fila, o Painel volta a ser estimado
   if (t.erros && t.erros.length) toast('Parte da planilha não carregou: ' + t.erros[0]);
   if (t.extras) EXTRAS = t.extras;
-  if (t.lancamentos) { gravarCache('lista', t.lancamentos); if (!LANCS.length) LANCS = t.lancamentos; }
+  if (t.lancamentos) { gravarCache('lista', t.lancamentos); if (!LANCS.length) { LANCS = t.lancamentos; if (typeof filaNaLista === 'function') filaNaLista(); } }
   if (t.pendencias) { gravarCache('pend', t.pendencias); PEND = t.pendencias; }
   if (t.vencimentos) { gravarCache('venc', t.vencimentos); }
   S.plano = {};
@@ -3740,6 +4101,7 @@ function aplicarTudo(t) {
 }
 let syncPendente = 0;
 function atualizarPainel() {
+  if (typeof NAT !== 'undefined' && NAT.off) { set(); return Promise.resolve(); }   // v7.2.2: sem internet não há o que buscar
   invalidar('lista', 'pend', 'venc', 'sim', 'orc', 'ana', 'reemb:', 'reemb:' + (RB ? RB.mes : ''), 'rendas', 'rel', 'cat'); invalidarMov();
   if (REV) invalidar('rev:' + REV.mes);
   clearTimeout(syncPendente);

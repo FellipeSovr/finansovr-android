@@ -1,8 +1,13 @@
 package br.finansovr.app;
 
+import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.webkit.WebView;
@@ -75,7 +80,26 @@ public class MainActivity extends BridgeActivity {
             }
         });
 
+        // v7.2.2: o app sabe na hora quando a internet cai ou volta (sem esperar um envio falhar)
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm != null && Build.VERSION.SDK_INT >= 24) cm.registerDefaultNetworkCallback(new ConnectivityManager.NetworkCallback() {
+                @Override public void onAvailable(Network n) { js("window.fzRede&&fzRede(true)"); }
+                @Override public void onLost(Network n) { js("window.fzRede&&fzRede(false)"); }
+            });
+        } catch (Exception ignored) {}
+
         tratarIntent(getIntent());
+    }
+
+    static boolean temRede(Context c) {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) c.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return true;
+            Network n = cm.getActiveNetwork();
+            NetworkCapabilities k = n == null ? null : cm.getNetworkCapabilities(n);
+            return k != null && k.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        } catch (Exception e) { return true; }
     }
 
     private static String lado(BackEventCompat e) {

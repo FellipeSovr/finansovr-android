@@ -24,6 +24,7 @@ public class AlarmeReceiver extends BroadcastReceiver {
                     .build();
             WorkManager.getInstance(c).enqueueUniqueWork("conferir" + hora, ExistingWorkPolicy.REPLACE, w);
         }
+        try { Fila.conferirParada(c); } catch (Exception ignored) {}   // v7.2.2: gasto parado há mais de 24 h
         Avisos.agendar(c);
     }
 }

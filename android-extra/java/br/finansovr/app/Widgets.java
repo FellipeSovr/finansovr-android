@@ -93,7 +93,7 @@ final class Widgets {
         v.setProgressBar(neg ? R.id.wm_barra_neg : R.id.wm_barra, 1000, progresso(d), false);
         v.setTextViewText(R.id.wm_semana, tem ? dinheiro(d.optDouble("semana", 0), oc) : "—");
         v.setTextViewText(R.id.wm_livre, tem ? dinheiro(d.optDouble("livre", 0), oc) : "—");
-        v.setTextViewText(R.id.wm_rodape, tem ? ((dentro ? "dentro do limite" : "passou do limite") + " · atualizado " + d.optString("quando", "")) : "Abra o app para carregar");
+        v.setTextViewText(R.id.wm_rodape, tem ? ((dentro ? "dentro do limite" : "passou do limite") + (d.optBoolean("estimado", false) ? " · estimado" : " · atualizado " + d.optString("quando", ""))) : "Abra o app para carregar");
         v.setOnClickPendingIntent(R.id.wm_raiz, Avisos.abrir(c, "painel", 200));
         JSONArray at = d.optJSONArray("atalhos");
         int[][] ids = {
@@ -132,7 +132,7 @@ final class Widgets {
         v.setTextViewText(R.id.wp_estado, dentro ? "dentro do limite" : "passou do limite");
         v.setTextColor(R.id.wp_estado, ContextCompat.getColor(c, dentro ? R.color.wd_ok : R.color.wd_neg));
         v.setViewVisibility(R.id.wp_estado, tem ? View.VISIBLE : View.GONE);
-        v.setTextViewText(R.id.wp_rodape, tem ? "atualizado " + d.optString("quando", "") : "");
+        v.setTextViewText(R.id.wp_rodape, tem ? (d.optBoolean("estimado", false) ? "estimado" : "atualizado " + d.optString("quando", "")) : "");
         v.setOnClickPendingIntent(R.id.wp_raiz, Avisos.abrir(c, "painel", 201));
         return v;
     }
