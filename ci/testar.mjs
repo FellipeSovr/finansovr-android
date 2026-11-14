@@ -1,7 +1,8 @@
 // Testes automáticos antes de compilar o APK (v7.2.0). Para o build se algo falhar.
 // 1) sintaxe de todos os scripts da tela; 2) a tela abre com dados de exemplo (ci/fixture.json, fictícios) e sem erros;
 // 3) as abas e as telas do Mais montam; 4) um gasto novo aparece na lista na hora ("enviando…") e é confirmado;
-// 5) (v7.2.2) sem internet, o gasto vai para a fila do celular e sai quando a conexão volta.
+// 5) (v7.2.2) sem internet, o gasto vai para a fila do celular e sai quando a conexão volta;
+// 6) (v7.3.0, versão de teste) as chaves do teste de fluidez: contador de quadros e desfoque.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,6 +77,20 @@ ok(await p.evaluate(() => LANCS.some(x => x.desc === 'Sem internet' && x.pend ==
 ok(await p.evaluate(() => NAT.estimado && !!document.querySelector('.estb')), 'sem internet: Painel estimado');
 await p.evaluate(() => mudarConexao(true)); await p.waitForTimeout(3000);
 ok(await p.evaluate(() => FL.itens.length === 0 && LANCS.some(x => x.desc === 'Sem internet' && x.linha > 0 && !x.pend) && !NAT.estimado), 'internet de volta: fila enviada');
+// v7.3.0 (versão de teste): chaves do teste de fluidez em Ajustes, contador de quadros e desfoque desligável
+await p.evaluate(() => { go('mais'); }); await p.waitForTimeout(300);
+await p.evaluate(() => abrirSub('ajustes', 'mais')); await p.waitForTimeout(500);
+ok(await p.evaluate(() => document.body.innerText.includes('Teste de fluidez') && !document.querySelector('.tfps') && !M.vp.classList.contains('leve')), 'teste de fluidez: chaves em Ajustes, tudo como na 7.2.2 por padrão');
+await p.evaluate(() => tfContador()); await p.waitForTimeout(900);
+ok(await p.evaluate(() => /^\d+ · –$/.test((document.querySelector('.tfps') || {}).textContent || '')), 'contador de quadros aparece e conta');
+await p.evaluate(() => abrirG('horas')); await p.waitForTimeout(1300);
+ok(await p.evaluate(() => /^\d+ · \d+$/.test(document.querySelector('.tfps').textContent) && TF.pior > 0), 'contador mostra o pior trecho da última janela');
+const filtro = () => p.evaluate(() => getComputedStyle(document.querySelector('#sheetEl')).backdropFilter);
+ok(/blur/.test(await filtro()), 'janela com desfoque (padrão)');
+await p.evaluate(() => tfDesfoque()); await p.waitForTimeout(300);
+ok(await filtro() === 'none' && await p.evaluate(() => M.vp.classList.contains('leve')), 'desfoque desligado pela chave');
+await p.evaluate(() => { tfDesfoque(); tfContador(); fecharSheet(); }); await p.waitForTimeout(500);
+ok(await p.evaluate(() => !document.querySelector('.tfps') && !M.vp.classList.contains('leve')), 'chaves desligadas: volta ao normal');
 ok(erros.length === 0, 'sem erros na tela' + (erros.length ? ': ' + erros.slice(0, 3).join(' | ') : ''));
 await b.close();
 if (falhas) { console.log(falhas + ' teste(s) falharam'); process.exit(1); }

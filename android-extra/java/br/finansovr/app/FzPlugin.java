@@ -17,6 +17,9 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
 import android.provider.Settings;
+import android.view.Display;
+import android.view.Window;
+import android.view.WindowManager;
 
 import androidx.activity.result.ActivityResult;
 import androidx.core.app.NotificationManagerCompat;
@@ -116,6 +119,41 @@ public class FzPlugin extends Plugin {
         p(r, "tem", Boolean.valueOf(tem));
         p(r, "toque", Boolean.valueOf(toque != 0));
         call.resolve(r);
+    }
+
+    // v7.3.0 (versão de teste da fluidez): com "max", pede ao Android a taxa máxima da tela para a janela do app
+    // (ou desfaz o pedido); sem "max", só informa. A resposta traz a taxa atual, a máxima e os modos da tela.
+    @PluginMethod
+    public void quadros(PluginCall call) {
+        final Boolean max = call.getBoolean("max");
+        getActivity().runOnUiThread(() -> {
+            JSObject r = new JSObject();
+            try {
+                Window w = getActivity().getWindow();
+                Display d = w.getDecorView().getDisplay();
+                if (d == null) d = getActivity().getWindowManager().getDefaultDisplay();
+                Display.Mode atual = d.getMode();
+                Display.Mode melhor = atual;
+                JSArray modos = new JSArray();
+                for (Display.Mode m : d.getSupportedModes()) {
+                    modos.put(m.getPhysicalWidth() + "x" + m.getPhysicalHeight() + "@" + Math.round(m.getRefreshRate()));
+                    if (m.getPhysicalWidth() == atual.getPhysicalWidth() && m.getPhysicalHeight() == atual.getPhysicalHeight()
+                            && m.getRefreshRate() > melhor.getRefreshRate()) melhor = m;
+                }
+                if (max != null) {
+                    WindowManager.LayoutParams lp = w.getAttributes();
+                    lp.preferredDisplayModeId = max ? melhor.getModeId() : 0;
+                    lp.preferredRefreshRate = max ? melhor.getRefreshRate() : 0f;
+                    w.setAttributes(lp);
+                }
+                p(r, "atual", Double.valueOf(d.getRefreshRate()));
+                p(r, "maxima", Double.valueOf(melhor.getRefreshRate()));
+                p(r, "modos", modos);
+            } catch (Exception e) {
+                p(r, "erro", e.getMessage() == null ? "falhou" : e.getMessage());
+            }
+            call.resolve(r);
+        });
     }
 
     @PluginMethod
