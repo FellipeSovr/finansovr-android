@@ -24,6 +24,10 @@ a{color:var(--link)}a:hover{color:var(--tx)}
 .gl{background:linear-gradient(140deg,rgba(255,255,255,.14),rgba(255,255,255,.045));border:1px solid rgba(255,255,255,.2);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 8px 22px rgba(0,4,30,.28)}
 .leve .blur{-webkit-backdrop-filter:none;backdrop-filter:none;background:linear-gradient(140deg,#1F3269,#142553)}
 .leve .sheet.blur{background:linear-gradient(180deg,#1C2E62,#111F47)}
+/* v7.3.0 (versão de teste): sem desfoque também no tema claro, e o contador de quadros */
+.claro.leve .blur{background:linear-gradient(140deg,#F7F9FE,#E4EBF8)}
+.claro.leve .sheet.blur{background:linear-gradient(180deg,#F8FAFF,#ECF2FC)}
+.tfps{position:absolute;top:calc(2px + var(--sat));left:50%;transform:translateX(-50%);z-index:60;pointer-events:none;padding:1px 8px;border-radius:9px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;line-height:16px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .press{transition:transform .18s cubic-bezier(.3,1.4,.5,1)}
 .press:active{transform:scale(.95)}
 .scroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:78px 0 124px;box-sizing:border-box;scrollbar-width:none;user-select:none;-webkit-user-select:none}
@@ -526,7 +530,7 @@ html.nativo .vp{max-width:none}
   <input type="file" id="arqIn" class="fileh" multiple accept="application/pdf,image/*,.csv,.ofx,.xlsx" onchange="enviarArquivos(this)" tabindex="-1" aria-hidden="true">
 </div>
 <script>
-window.FZ_VERSAO = 'v7.2.2';
+window.FZ_VERSAO = 'v7.3.0';
 window.FZ_API = '__FZ_API_URL__'; window.FZ_REPO = '__FZ_REPO__';
 window.__fzErros = [];
 window.addEventListener('error', function (ev) { window.__fzErros.push((ev.message || 'erro') + (ev.lineno ? ' (linha ' + ev.lineno + ')' : '')); });
@@ -2016,6 +2020,10 @@ TELAS.ajustes = () => {
           { t: 'Lembrete de domingo', sb: 'anexar faturas e extratos, por volta das 12h', val: domingoOn(), on: alternarDomingo }] : []) : [])
       .concat([{ t: 'E-mails automáticos', sb: 'alertas e resumos também por e-mail', val: emailsOn(), on: alternarEmails },
         { t: 'Vibrar ao tocar', sb: 'só neste aparelho', val: vibOn(), on: alternarVib }]) }),
+    bk('H', { t: 'Teste de fluidez' }),
+    bk('SwG', { items: [{ t: 'Contador de quadros', sb: 'agora · pior trecho da última janela', val: tfContadorOn(), on: tfContador },
+        { t: 'Desfoque do vidro', sb: 'desligue para comparar', val: tfDesfoqueOn(), on: tfDesfoque }]
+      .concat(NAT.app || NAT.simula ? [{ t: 'Pedir 120 Hz ao Android', sb: 'a taxa máxima da tela', val: tf120On(), on: tf120 }] : []) }),
     bk('H', { t: 'Ajuda' }),
     bk('List', { items: [L('#8FE6FF', '#m-como', 'Como funciona', 'o app explicado', '', '', () => abrirSub('como', 'ajustes'))] }),
     bk('Txt', { t: 'Referência: ' + AJ.dataRef + ' (mês ' + AJ.mesRef + ') · versão ' + window.FZ_VERSAO })
@@ -2169,6 +2177,7 @@ function abrirSheet(kind, extra) {
   S.sheet = kind; S.closing = false; S.sheetK++; S.saveOk = false; S.shT = Date.now();
   if (kind === 'fogo') S.fogoK++;
   Object.assign(S, extra || {});
+  tfJanela();
   vib(8); set();
 }
 function fecharSheet() {
@@ -3535,6 +3544,57 @@ function alternarVib() {
   }).catch(() => toast('Vibração ligada'));
 }
 
+// ---------- v7.3.0 (versão de teste): medir a fluidez no celular. Contador de quadros e chaves em Ajustes › Teste de fluidez.
+// Tudo vale só neste aparelho e sai na versão final. Sem mexer em nada, o app fica como na 7.2.2.
+const TF = { raf: 0, el: null, ts: [], ult: 0, cap: null, pior: 0 };
+function tfLer(k, d) { try { const v = localStorage.getItem(CV + k); return v == null ? d : v === '1'; } catch (e) { return d; } }
+function tfGravar(k, v) { try { localStorage.setItem(CV + k, v ? '1' : '0'); } catch (e) {} }
+const tfContadorOn = () => tfLer('tfps', false), tfDesfoqueOn = () => tfLer('tblur', true), tf120On = () => tfLer('t120', false);
+// pior trecho (uns 120 ms) de uma sequência de quadros, em quadros por segundo
+function tfPior(ts) {
+  let m = 0;
+  for (let i = 0, j = 0; i < ts.length; i++) {
+    while (j < ts.length - 1 && ts[j] - ts[i] < 120) j++;
+    const d = ts[j] - ts[i]; if (d < 120) break;
+    const q = (j - i) * 1000 / d; if (!m || q < m) m = q;
+  }
+  return Math.round(m);
+}
+function tfQuadro(t) {
+  TF.raf = requestAnimationFrame(tfQuadro);
+  TF.ts.push(t); while (TF.ts.length > 2 && t - TF.ts[0] > 500) TF.ts.shift();
+  if (TF.cap) { TF.cap.push(t); if (t - TF.cap[0] > 650) { TF.pior = tfPior(TF.cap); TF.cap = null; } }   // 650 ms: a janela leva 500 ms para subir
+  if (t - TF.ult > 250 && TF.el) {
+    TF.ult = t; const n = TF.ts.length, d = t - TF.ts[0];
+    TF.el.textContent = (n > 1 && d > 0 ? Math.round((n - 1) * 1000 / d) : '–') + ' · ' + (TF.pior || '–');
+  }
+}
+function tfJanela() { if (TF.el) TF.cap = [performance.now()]; }   // chamada quando uma janela abre
+function tfAplicar() {
+  if (!M.vp) return;
+  M.vp.classList.toggle('leve', !tfDesfoqueOn());
+  const on_ = tfContadorOn();
+  if (on_ && !TF.el) {
+    TF.el = document.createElement('div'); TF.el.className = 'tfps'; TF.el.setAttribute('aria-hidden', 'true'); TF.el.textContent = '– · –';
+    M.vp.appendChild(TF.el); TF.ts = []; TF.ult = 0; TF.raf = requestAnimationFrame(tfQuadro);
+  }
+  if (!on_ && TF.el) { cancelAnimationFrame(TF.raf); TF.el.remove(); TF.el = null; TF.cap = null; TF.pior = 0; }
+}
+function tfContador() { tfGravar('tfps', !tfContadorOn()); vib(4); tfAplicar(); set(); }
+function tfDesfoque() { tfGravar('tblur', !tfDesfoqueOn()); vib(4); tfAplicar(); set(); toast(tfDesfoqueOn() ? 'Desfoque ligado' : 'Desfoque desligado'); }
+// 120 Hz: o lado Android pede a taxa máxima para a janela do app e, quase 1 s depois, diz em quantos Hz a tela ficou
+function tfPedir120(avisar) {
+  const p = FZP();
+  if (!(NAT.app && p && typeof p.quadros === 'function')) { if (avisar) toast('O pedido de 120 Hz só existe no app Android'); return; }
+  p.quadros({ max: tf120On() }).then(() => new Promise(r => setTimeout(r, 900))).then(() => p.quadros({})).then(r => {
+    if (!avisar || !r) return;
+    if (r.erro) { toast('O Android recusou: ' + r.erro); return; }
+    const a = Math.round(r.atual || 0), m = Math.round(r.maxima || 0);
+    toast(!tf120On() ? 'Pedido desligado · tela a ' + a + ' Hz' : a >= m - 1 ? 'Tela a ' + a + ' Hz' : 'Pedi ' + m + ' Hz, mas a tela está em ' + a + ' Hz');
+  }).catch(e => { if (avisar) toast('Não consegui pedir: ' + (e && e.message || e)); });
+}
+function tf120() { tfGravar('t120', !tf120On()); vib(4); set(); tfPedir120(true); }
+
 // ---------- voltar (gesto da borda): fecha o que estiver aberto, um nível por vez
 function alvoVoltar() {
   if (NAT.con && !NAT.conectado) return { k: 'con' };
@@ -3939,6 +3999,7 @@ function natIniciar() {                        // chamada em iniciar(): no naveg
   if (p) p.info().then(i => { NAT.versao = i.versao || NAT.versao; NAT.aparelho = i.aparelho || NAT.aparelho; if (i.sat != null) fzInsets(i.sat, i.sab); if (typeof i.rede === 'boolean' && lerCred()) mudarConexao(i.rede); set(); }).catch(() => {});
   if (NAT.ins) fzInsets(NAT.ins.t, NAT.ins.b);
   natTema(temaEf());
+  if (tf120On()) tfPedir120(false);              // v7.3.0 (teste): o pedido de 120 Hz vale de novo a cada abertura
   window.addEventListener('online', () => mudarConexao(true));
   window.addEventListener('offline', () => mudarConexao(false));
   if (!lerCred()) { NAT.conectado = false; NAT.con = { passo: 'inicio' }; set(); return false; }
@@ -4273,6 +4334,7 @@ function iniciar() {
   M.vp = document.getElementById('vp'); M.scroll = document.getElementById('scroller'); M.pw = document.getElementById('pw'); M.ind = document.getElementById('indp');
   M.tab = document.getElementById('m-tab'); M.hd = document.getElementById('m-hd'); M.toast = document.getElementById('m-toast'); M.fan = document.getElementById('m-fan'); M.nav = document.getElementById('m-nav'); M.sheet = document.getElementById('m-sheet'); M.con = document.getElementById('m-con');
   M.vp.classList.toggle('claro', temaEf() === 'claro');
+  tfAplicar();                                  // v7.3.0 (teste): contador e desfoque como ficaram em Ajustes
   S.VW = M.vp.clientWidth || 390; S.W = Math.max(240, S.VW - 64);
   // topo compacto ao rolar
   M.scroll.addEventListener('scroll', () => { const c = M.scroll.scrollTop > 44; if (c !== S.cmp) set({ cmp: c }); }, { passive: true });
