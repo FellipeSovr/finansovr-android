@@ -19,7 +19,7 @@
         </FrameLayout>
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:orientation="horizontal">
             <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginEnd="16dp" android:orientation="vertical">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Na semana" android:textColor="@color/wd_t2" android:textSize="11.5sp" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Por dia, até domingo" android:textColor="@color/wd_t2" android:textSize="11.5sp" />
                 <TextView android:id="@+id/wm_semana" android:layout_width="wrap_content" android:layout_height="wrap_content" android:maxLines="1" android:textColor="@color/wd_tx" android:textSize="14sp" android:fontFamily="@font/fz_jakarta_800" />
             </LinearLayout>
             <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical">

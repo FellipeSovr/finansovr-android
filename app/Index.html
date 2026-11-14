@@ -24,7 +24,13 @@ a{color:var(--link)}a:hover{color:var(--tx)}
 .gl{background:linear-gradient(140deg,rgba(255,255,255,.14),rgba(255,255,255,.045));border:1px solid rgba(255,255,255,.2);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 8px 22px rgba(0,4,30,.28)}
 .leve .blur{-webkit-backdrop-filter:none;backdrop-filter:none;background:linear-gradient(140deg,#1F3269,#142553)}
 .leve .sheet.blur{background:linear-gradient(180deg,#1C2E62,#111F47)}
-/* v7.3.0 (versão de teste): sem desfoque também no tema claro, e o contador de quadros */
+/* v7.3.1: vidro "falso" em movimento. Enquanto a janela sobe ou desce, e enquanto a tela rola ou troca de aba, o vidro
+   fica sem desfoque real, numa cor quase opaca; parado, volta o vidro de sempre. */
+.vp{--vf:linear-gradient(140deg,rgba(31,50,105,.96),rgba(20,37,83,.96));--vfs:linear-gradient(180deg,#1C2E62,#111F47)}
+.vp.claro{--vf:linear-gradient(140deg,rgba(247,249,254,.96),rgba(228,235,248,.96));--vfs:linear-gradient(180deg,#F8FAFF,#ECF2FC)}
+.vf .sheet.blur.sub,.vf .sheet.blur.out{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--vfs)}
+.vf.mov .blur:not(.sheet){-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--vf)}
+/* v7.3.0: sem desfoque também no tema claro, e o contador de quadros */
 .claro.leve .blur{background:linear-gradient(140deg,#F7F9FE,#E4EBF8)}
 .claro.leve .sheet.blur{background:linear-gradient(180deg,#F8FAFF,#ECF2FC)}
 .tfps{position:absolute;top:calc(2px + var(--sat));left:50%;transform:translateX(-50%);z-index:60;pointer-events:none;padding:1px 8px;border-radius:9px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;line-height:16px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -530,7 +536,7 @@ html.nativo .vp{max-width:none}
   <input type="file" id="arqIn" class="fileh" multiple accept="application/pdf,image/*,.csv,.ofx,.xlsx" onchange="enviarArquivos(this)" tabindex="-1" aria-hidden="true">
 </div>
 <script>
-window.FZ_VERSAO = 'v7.3.0';
+window.FZ_VERSAO = 'v7.3.1';
 window.FZ_API = '__FZ_API_URL__'; window.FZ_REPO = '__FZ_REPO__';
 window.__fzErros = [];
 window.addEventListener('error', function (ev) { window.__fzErros.push((ev.message || 'erro') + (ev.lineno ? ' (linha ' + ev.lineno + ')' : '')); });
@@ -1066,8 +1072,8 @@ function painelHTML() {
       </div>
 
       <div style="margin:16px 16px 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
-        <div class="gl tile"><div class="k">Na semana</div><div class="v">${fm(nTxt(h.semana))}</div></div>
-        <div class="gl tile"><div class="k">Por dia</div><div class="v">${fm(nTxt(h.amanha))}</div></div>
+        <div class="gl tile"><div class="k">Por dia, amanhã</div><div class="v">${chipAmanha(h)}</div></div>
+        <div class="gl tile"><div class="k">Por dia, até domingo</div><div class="v">${chipDomingo()}</div></div>
         <div class="gl tile"><div class="k">Livre no mês</div><div class="v">${fm(nTxt(h.livreMes))}</div></div>
         <div class="gl tile" style="background:linear-gradient(140deg,rgba(95,224,176,.26),rgba(95,224,176,.07))"><div class="k" style="color:var(--ok)">Sobra prevista</div><div class="v">${fm(nTxt(sob ? sob[1] : h.faltaMeta))}</div></div>
       </div>
@@ -1097,10 +1103,12 @@ function painelHTML() {
       </div>
       <p style="margin:16px 20px 0;font-size:12px;color:var(--t4);text-align:center">Atualizado às ${esc(String(d.atualizado || '').slice(11, 16) || '–')}</p>`;
 }
-function icVenc(v) {
+function icVenc(v) {           // v7.3.1: o ícone escolhido; sem escolha, o da categoria
   if (v.tipo === 'Fatura') return ['#c-cartao', '#8FA8FF'];
-  const cat = String(v.sub || '').split(' · ')[1] || '';
-  if (v.tipo === 'Conta' && cat) { const a = icDe(cat); return [ih(a[0]), a[1]]; }
+  const cad = v.venc && VENCD ? (VENCD.cadastro || []).find(x => x.id === v.venc) : null;
+  const cat = cad ? cad.cat : (String(v.sub || '').split(' · ')[1] || '');
+  if (cad && (cad.icone || cad.cor)) { const a = icDe(cad.cat); return [ih(cad.icone || a[0]), cad.cor || a[1]]; }
+  if (cat) { const a = icDe(cat); return [ih(a[0]), a[1]]; }
   return ['#c-imposto', '#FFC85C'];
 }
 function dobra(k, t, fn) {
@@ -1654,7 +1662,7 @@ function maisHTML() {
         </div>`;
 }
 function abrirSub(k, pai) {
-  vib(6);
+  vib(6); vfMov(420);
   const precisa = CARGA[k] ? !temDados(k) : false;
   S.sub = k; S.subPai = pai || 'mais'; S.subLoad = precisa; S.subOut = false; S.accOpen = {}; S.gridIn = false;
   if (S.tab !== 'mais') { S.tab = 'mais'; S.dir = 'r'; }
@@ -1664,7 +1672,7 @@ function abrirSub(k, pai) {
 }
 function voltarSub() {
   if (S.subOut) return;
-  vib(5);
+  vib(5); vfMov(420);
   const pai = S.subPai;
   set({ subOut: true });
   setTimeout(() => {
@@ -1924,8 +1932,8 @@ function verEmLancamentos(q, cat, m) { fecharSheet(); Object.assign(LF, LF_PADRA
 function itemVenc(v, i, futuro) {
   const a = icVenc(v), mesAno = v.data.slice(0, 4) !== hojeIso().slice(0, 4) ? ' ' + v.data.slice(0, 4) : '';
   const sb = diaMes(v.data) + mesAno + ' · ' + (futuro ? (v.tipo === 'Avulso' ? 'avulso' : String(v.sub || '').toLowerCase()) : quando(v.dias));
-  const vs = v.tipo === 'Fatura' ? 'fecha dia ' + v.fech : v.tipo === 'Conta' ? String(v.sub || '').split(' · ')[0].toLowerCase() : 'avulso';
-  return L(a[1], v.tipo === 'Fatura' ? '#m-cart' : v.tipo === 'Avulso' ? '#m-venc' : a[0], semCart(v.desc), sb, fm(v.valor), vs, () => abrirVenc(v));
+  const vs = v.tipo === 'Fatura' ? 'fecha dia ' + v.fech : v.tipo === 'Conta' ? String(v.sub || '').split(' · ')[0].toLowerCase() : (v.rep === 'mes' ? 'todo mês' : v.rep === 'ano' ? 'todo ano' : 'avulso');
+  return L(a[1], v.tipo === 'Fatura' ? '#m-cart' : a[0], semCart(v.desc), sb, fm(v.valor), vs, () => abrirVenc(v));
 }
 function abrirVenc(v) {
   if (v.tipo === 'Fatura') abrirG('vFat', { v });
@@ -2022,8 +2030,7 @@ TELAS.ajustes = () => {
         { t: 'Vibrar ao tocar', sb: 'só neste aparelho', val: vibOn(), on: alternarVib }]) }),
     bk('H', { t: 'Teste de fluidez' }),
     bk('SwG', { items: [{ t: 'Contador de quadros', sb: 'agora · pior trecho da última janela', val: tfContadorOn(), on: tfContador },
-        { t: 'Desfoque do vidro', sb: 'desligue para comparar', val: tfDesfoqueOn(), on: tfDesfoque }]
-      .concat(NAT.app || NAT.simula ? [{ t: 'Pedir 120 Hz ao Android', sb: 'a taxa máxima da tela', val: tf120On(), on: tf120 }] : []) }),
+        { t: 'Desfoque do vidro', sb: 'desligue para comparar', val: tfDesfoqueOn(), on: tfDesfoque }] }),
     bk('H', { t: 'Ajuda' }),
     bk('List', { items: [L('#8FE6FF', '#m-como', 'Como funciona', 'o app explicado', '', '', () => abrirSub('como', 'ajustes'))] }),
     bk('Txt', { t: 'Referência: ' + AJ.dataRef + ' (mês ' + AJ.mesRef + ') · versão ' + window.FZ_VERSAO })
@@ -2171,13 +2178,14 @@ async function concluirRev() {
 }
 
 // ------------------------------------------------ janelas (todas no mesmo padrão da janela de novo gasto)
-let CT = 0;
+let CT = 0, SUBT = 0;
 function abrirSheet(kind, extra) {
   clearTimeout(CT);
   S.sheet = kind; S.closing = false; S.sheetK++; S.saveOk = false; S.shT = Date.now();
   if (kind === 'fogo') S.fogoK++;
   Object.assign(S, extra || {});
   tfJanela();
+  S.shSub = true; clearTimeout(SUBT); SUBT = setTimeout(() => set({ shSub: false }), reduz() ? 0 : 540);   // v7.3.1: sobe sem desfoque real; parada, volta o vidro
   vib(8); set();
 }
 function fecharSheet() {
@@ -2204,7 +2212,7 @@ function janelaHTML() {
   return `<div data-k="sh${S.sheetK}">
     <div class="bd ${out}" onclick="${on(fecharFundo)}" aria-hidden="true"></div>
     <div class="shw settle" id="shw" style="transform:translateY(${(S.shDy || 0).toFixed(1)}px)">
-    <div class="blur sheet ${out}" id="sheetEl" role="dialog" aria-modal="true" aria-label="${esc(tit)}">
+    <div class="blur sheet ${out}${S.shSub ? ' sub' : ''}" id="sheetEl" role="dialog" aria-modal="true" aria-label="${esc(tit)}">
       <div class="handle"></div>
       ${corpo}
     </div>
@@ -2224,7 +2232,7 @@ function abrirLancar(o) {
   fecharFan();
   S.f = f; abrirSheet('lancar');
   S.rolarPick = true;
-  if (!f.edit) setTimeout(() => { const v = document.getElementById('fv'); if (v && S.sheet === 'lancar') try { v.focus({ preventScroll: true }); } catch (e) {} }, 420);
+  // v7.3.1: o teclado não abre mais sozinho no gasto novo (abria com a janela ainda subindo); toque no valor para digitar
 }
 function aplicarAtalhoF(f, x) {
   f.cat = x.cat; f.manual = true; f.sug = false;
@@ -2741,20 +2749,53 @@ GS.recup = () => {
   ] };
 };
 // ---------- vencimentos
+// v7.3.1: chips do Painel. "Por dia, amanhã" = livre do mês ÷ dias restantes sem hoje ("–" no último dia do mês);
+// "Por dia, até domingo" = o limite de hoje na semana, o mesmo da aba Semana (no domingo, o do próprio domingo).
+function ultimoDiaMes() { const h = hojeIso(); return Number(h.slice(8)) === diasNoMes(h.slice(0, 7)); }
+function chipAmanha(h) { return ultimoDiaMes() || h.amanha === undefined || h.amanha === '' ? '–' : fm(nTxt(h.amanha)); }
+function porDiaDomingo() {            // número, ou null quando a semana ainda não chegou
+  const sem = (DADOS && DADOS.semana) || [], d = sem.find(x => x.situacao === 'Hoje') || sem.find(x => x.data === hojeIso());
+  return d && d.limite !== '' && d.limite != null ? nTxt(d.limite) : null;
+}
+function chipDomingo() { const v = porDiaDomingo(); return v == null ? '–' : fm(v); }
+// v7.3.1: vencimento com ícone e cor à escolha (a mesma galeria das categorias; sem escolha, o da categoria) e
+// repetição Único / Todo mês / Todo ano. "Todo mês" aceita Crédito, com o cartão.
 GS.venc = (p) => {
-  const v = p.id && VENCD ? (VENCD.cadastro || []).find(x => x.id === p.id) : null, cats = (LISTAS && LISTAS.categorias) || [];
+  const v = p.id && VENCD ? (VENCD.cadastro || []).find(x => x.id === p.id) : null, cats = (LISTAS && LISTAS.categorias) || [], carts = (LISTAS && LISTAS.cartoes) || [];
+  const cat = fx('vCat', v ? v.cat : (cats.find(c => /Moradia|Casa/.test(c)) || cats[0]));
+  const novo = !!(VENCD && VENCD.v73);          // o servidor (Code.gs) já aceita repetição mensal, ícone e cor?
+  let rep = fx('vRep', v ? (v.rep || (v.anual ? 'ano' : 'unico')) : 'unico'); if (!novo && rep === 'mes') rep = 'unico';
+  const meios = [['Boleto', 'Boleto'], ['Pix', 'Pix'], ['Débito automático', 'Débito aut.']].concat(rep === 'mes' ? [['Crédito', 'Crédito']] : []);
+  let meio = fx('vMeio', v ? v.meio : 'Boleto'); if (!meios.some(m => m[0] === meio)) meio = 'Boleto';
+  const cred = meio === 'Crédito', cartao = fx('vCart', v && v.cartao ? v.cartao : (carts[0] || ''));
+  const pad = icDe(cat), ic = fx('vIc', v && v.icone ? v.icone : ''), cor = fx('vCor', v && v.cor ? v.cor : ''), icE = ic || pad[0], corE = cor || pad[1], gal = fx('vGal', false);
+  const pick = (o) => { vib(3); S.fx = Object.assign({}, S.fx, { vIc: icE, vCor: corE }, o); set(); };
+  const galeria = !gal ? '' : `<div class="fade" data-k="vgal">
+      <div class="lbl">Cor</div>
+      <div style="display:flex;flex-wrap:wrap;gap:9px">${PAL16.map((c, i) => `<button type="button" class="swc ${corE === c ? 'on' : ''}" style="background:${c}" onclick="${on(() => pick({ vCor: c }))}" aria-label="Cor ${i + 1}" aria-pressed="${corE === c}"></button>`).join('')}</div>
+      ${ICG.map(g => `<div data-k="vg-${esc(g[0])}"><div style="font-size:12px;font-weight:600;color:var(--t3);margin:14px 0 8px">${esc(g[0])}</div>
+        <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px 6px">${g[1].map(a => `<button type="button" class="icb ${icE === a[0] ? 'on' : ''}" onclick="${on(() => pick({ vIc: a[0] }))}" aria-label="${esc(a[1].split(' ')[0])}" aria-pressed="${icE === a[0]}">${icSpan(corE, ih(a[0]), 44, 15, 22, 1.7)}</button>`).join('')}</div></div>`).join('')}
+      ${ic || cor ? `<button type="button" class="del press" style="margin-top:14px" onclick="${on(() => { vib(4); S.fx = Object.assign({}, S.fx, { vIc: '', vCor: '' }); set(); })}">Usar o da categoria</button>` : ''}
+    </div>`;
   return { tit: v ? 'Vencimento' : 'Novo vencimento', sh: [
-    bInp('vDesc', 'Descrição', v ? v.desc : '', 'Ex.: IPVA, IPTU, anuidade'),
+    bInp('vDesc', 'Descrição', v ? v.desc : '', 'Ex.: IPVA, terapia, assinatura'),
     bBig('vVal', 'Valor', v ? br(v.valor) : ''),
-    bInp('vData', 'Vence em', v ? v.data : '', '', 'text', '', 'date'),
-    bSeg('vMeio', [['Boleto', 'Boleto'], ['Pix', 'Pix'], ['Débito automático', 'Débito aut.']], v ? (['Boleto', 'Pix', 'Débito automático'].includes(v.meio) ? v.meio : 'Boleto') : 'Boleto', 'Como paga'),
-    bk('H', { t: 'Categoria' }), bChips('vCat', cats.map(c => [c, curto(c)]), v ? v.cat : (cats.find(c => /Moradia/.test(c)) || cats[0]), 'wr'),
-    bSw('vAnual', 'Repete todo ano', v ? !!v.anual : false),
-    bk('Pv', { cls: 'neu', t: 'Conta como gasto no mês em que vence.' }),
+    bSeg('vRep', novo ? [['unico', 'Único'], ['mes', 'Todo mês'], ['ano', 'Todo ano']] : [['unico', 'Único'], ['ano', 'Todo ano']], rep, 'Repete'),
+    bInp('vData', cred ? 'Primeira cobrança' : rep === 'mes' ? 'Primeiro vencimento' : 'Vence em', v ? v.data : '', '', 'text', '', 'date'),
+    bk('Seg', { t: 'Como paga', items: meios.map(o => ({ t: o[1], on: meio === o[0], pick: () => { vib(4); setFx('vMeio', o[0]); } })) }),
+    cred ? bChips('vCart', carts.map(c => [c, semCart(c)]), cartao) : null,
+    bk('H', { t: 'Categoria' }), bChips('vCat', cats.map(c => [c, curto(c)]), cat, 'wr'),
+    !novo ? null : bk('Raw', { html: `<div data-k="vic" style="margin-top:12px">
+      <button type="button" class="gl press" style="width:100%;display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:22px;text-align:left;cursor:pointer" onclick="${on(() => { vib(4); setFx('vGal', !gal); })}" aria-expanded="${gal}">
+        ${icSpan(corE, ih(icE), 44, 15, 22, 1.7)}
+        <span style="flex:1;min-width:0;font-size:15px;font-weight:600">Ícone e cor<span style="display:block;font-size:12px;font-weight:500;color:var(--t3);margin-top:2px">${ic || cor ? 'escolhidos por você' : 'os da categoria'}</span></span>
+        <span style="font-size:13px;font-weight:600;color:var(--link)">${gal ? 'Fechar' : 'Trocar'}</span>
+      </button>${galeria}</div>` }),
+    bk('Pv', { cls: 'neu', t: cred ? 'Vai na fatura do ' + semCart(cartao) + ', sem linha própria em Vencimentos.' : rep === 'mes' ? 'Conta como gasto todo mês, até você excluir.' : 'Conta como gasto no mês em que vence.' }),
     bk('Btn', { t: 'Salvar', a: () => {
-      const o = { id: v ? v.id : '', desc: fx('vDesc', v ? v.desc : ''), valor: fx('vVal', v ? br(v.valor) : ''), data: fx('vData', v ? v.data : ''), cat: fx('vCat', v ? v.cat : (cats.find(c => /Moradia/.test(c)) || cats[0])), meio: fx('vMeio', v ? v.meio : 'Boleto'), anual: fx('vAnual', v ? !!v.anual : false) };
+      const o = { id: v ? v.id : '', desc: fx('vDesc', v ? v.desc : ''), valor: fx('vVal', v ? br(v.valor) : ''), data: fx('vData', v ? v.data : ''), cat, meio, rep, anual: rep === 'ano', icone: ic, cor, cartao: cred ? cartao : '' };
       if (!o.desc || !o.valor || !o.data) { toast('Preencha descrição, valor e data'); return; }
-      okJanela(); acao(() => call('salvarVencimento', o), 'Vencimento salvo', async () => { invalidar('venc'); invalidarMov(); await CARGA.venc(); atualizarPainel(); });
+      okJanela(); acao(() => call('salvarVencimento', o), cred ? 'Salvo · vai na fatura do ' + semCart(cartao) : 'Vencimento salvo', async () => { invalidar('venc'); invalidarMov(); await CARGA.venc(); atualizarPainel(); });
     } }),
     v ? bk('Del', { t: 'Excluir vencimento', a: () => { okJanela(); acao(() => call('excluirVencimento', v.id), 'Vencimento excluído', async () => { invalidar('venc'); invalidarMov(); await CARGA.venc(); atualizarPainel(); }); } }) : null
   ] };
@@ -3544,12 +3585,12 @@ function alternarVib() {
   }).catch(() => toast('Vibração ligada'));
 }
 
-// ---------- v7.3.0 (versão de teste): medir a fluidez no celular. Contador de quadros e chaves em Ajustes › Teste de fluidez.
-// Tudo vale só neste aparelho e sai na versão final. Sem mexer em nada, o app fica como na 7.2.2.
+// ---------- v7.3.0/7.3.1: medir a fluidez no celular. Contador de quadros e chave do desfoque em Ajustes › Teste de fluidez.
+// Valem só neste aparelho. O pedido de 120 Hz da 7.3.0 saiu: o app já roda a 120 quadros por segundo sem ele.
 const TF = { raf: 0, el: null, ts: [], ult: 0, cap: null, pior: 0 };
 function tfLer(k, d) { try { const v = localStorage.getItem(CV + k); return v == null ? d : v === '1'; } catch (e) { return d; } }
 function tfGravar(k, v) { try { localStorage.setItem(CV + k, v ? '1' : '0'); } catch (e) {} }
-const tfContadorOn = () => tfLer('tfps', false), tfDesfoqueOn = () => tfLer('tblur', true), tf120On = () => tfLer('t120', false);
+const tfContadorOn = () => tfLer('tfps', false), tfDesfoqueOn = () => tfLer('tblur', true);
 // pior trecho (uns 120 ms) de uma sequência de quadros, em quadros por segundo
 function tfPior(ts) {
   let m = 0;
@@ -3582,18 +3623,6 @@ function tfAplicar() {
 }
 function tfContador() { tfGravar('tfps', !tfContadorOn()); vib(4); tfAplicar(); set(); }
 function tfDesfoque() { tfGravar('tblur', !tfDesfoqueOn()); vib(4); tfAplicar(); set(); toast(tfDesfoqueOn() ? 'Desfoque ligado' : 'Desfoque desligado'); }
-// 120 Hz: o lado Android pede a taxa máxima para a janela do app e, quase 1 s depois, diz em quantos Hz a tela ficou
-function tfPedir120(avisar) {
-  const p = FZP();
-  if (!(NAT.app && p && typeof p.quadros === 'function')) { if (avisar) toast('O pedido de 120 Hz só existe no app Android'); return; }
-  p.quadros({ max: tf120On() }).then(() => new Promise(r => setTimeout(r, 900))).then(() => p.quadros({})).then(r => {
-    if (!avisar || !r) return;
-    if (r.erro) { toast('O Android recusou: ' + r.erro); return; }
-    const a = Math.round(r.atual || 0), m = Math.round(r.maxima || 0);
-    toast(!tf120On() ? 'Pedido desligado · tela a ' + a + ' Hz' : a >= m - 1 ? 'Tela a ' + a + ' Hz' : 'Pedi ' + m + ' Hz, mas a tela está em ' + a + ' Hz');
-  }).catch(e => { if (avisar) toast('Não consegui pedir: ' + (e && e.message || e)); });
-}
-function tf120() { tfGravar('t120', !tf120On()); vib(4); set(); tfPedir120(true); }
 
 // ---------- voltar (gesto da borda): fecha o que estiver aberto, um nível por vez
 function alvoVoltar() {
@@ -3999,7 +4028,6 @@ function natIniciar() {                        // chamada em iniciar(): no naveg
   if (p) p.info().then(i => { NAT.versao = i.versao || NAT.versao; NAT.aparelho = i.aparelho || NAT.aparelho; if (i.sat != null) fzInsets(i.sat, i.sab); if (typeof i.rede === 'boolean' && lerCred()) mudarConexao(i.rede); set(); }).catch(() => {});
   if (NAT.ins) fzInsets(NAT.ins.t, NAT.ins.b);
   natTema(temaEf());
-  if (tf120On()) tfPedir120(false);              // v7.3.0 (teste): o pedido de 120 Hz vale de novo a cada abertura
   window.addEventListener('online', () => mudarConexao(true));
   window.addEventListener('offline', () => mudarConexao(false));
   if (!lerCred()) { NAT.conectado = false; NAT.con = { passo: 'inicio' }; set(); return false; }
@@ -4104,7 +4132,7 @@ function natWidget() {
   if (!DADOS) return null;
   const h = DADOS.hoje || {}, s = semInfo(), at = atalhosLista().slice(0, 3);
   const pode = typeof h.podeHojeNum === 'number' ? h.podeHojeNum : nTxt(h.podeHoje), gasto = nTxt(h.gastoHoje), lim = nTxt(h.limiteHoje);
-  const w = { pode, gasto, lim, semana: s.rest, livre: nTxt(h.livreMes), oculto: !!S.hide, dentro: pode >= -0.004,
+  const w = { pode, gasto, lim, semana: porDiaDomingo() ?? s.rest, livre: nTxt(h.livreMes), oculto: !!S.hide, dentro: pode >= -0.004,
     atalhos: at.map(q => { const a = icDe(q.cat); return { cat: q.cat, nome: curto(q.cat), cor: a[1], ic: a[0] }; }), quando: String(DADOS.atualizado || '').slice(-5),
     estimado: !!NAT.estimado, fila: typeof filaN === 'function' ? filaN() : 0 };
   const p = FZP(); if (NAT.app && p) p.widget({ dados: w }).catch(() => {});
@@ -4244,11 +4272,13 @@ function aplicarTema() {
 function setTema(v) { vib(4); try { localStorage.setItem(CV + 'tema', v); } catch (e) {} aplicarTema(); reportarTema(); }
 
 // ---------- navegação entre abas
+let VFT = 0;
+function vfMov(ms) { if (!M.vp) return; M.vp.classList.add('mov'); clearTimeout(VFT); VFT = setTimeout(() => M.vp.classList.remove('mov'), ms); }   // v7.3.1: sem desfoque real enquanto a tela se move
 function go(t) {
   const o = ['painel', 'semana', 'lista', 'mais'];
   fecharFan();
   if (t === S.tab) { if (M.scroll) try { M.scroll.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {} if (t === 'mais' && S.sub) set({ sub: null, subOut: false, gridIn: false, fx: {} }); return; }
-  vib(6);
+  vib(6); vfMov(420);
   set({ tab: t, dir: o.indexOf(t) > o.indexOf(S.tab) ? 'r' : 'l', sub: null, subOut: false, gridIn: false, swOpen: null, cmp: false });
   if (M.scroll) M.scroll.scrollTop = 0;
   if (t === 'painel') animHeroDe(0);
@@ -4334,7 +4364,8 @@ function iniciar() {
   M.vp = document.getElementById('vp'); M.scroll = document.getElementById('scroller'); M.pw = document.getElementById('pw'); M.ind = document.getElementById('indp');
   M.tab = document.getElementById('m-tab'); M.hd = document.getElementById('m-hd'); M.toast = document.getElementById('m-toast'); M.fan = document.getElementById('m-fan'); M.nav = document.getElementById('m-nav'); M.sheet = document.getElementById('m-sheet'); M.con = document.getElementById('m-con');
   M.vp.classList.toggle('claro', temaEf() === 'claro');
-  tfAplicar();                                  // v7.3.0 (teste): contador e desfoque como ficaram em Ajustes
+  tfAplicar();                                  // v7.3.0: contador e desfoque como ficaram em Ajustes
+  M.vp.classList.add('vf'); M.scroll.addEventListener('scroll', () => vfMov(160), { passive: true });   // v7.3.1: vidro "falso" em movimento
   S.VW = M.vp.clientWidth || 390; S.W = Math.max(240, S.VW - 64);
   // topo compacto ao rolar
   M.scroll.addEventListener('scroll', () => { const c = M.scroll.scrollTop > 44; if (c !== S.cmp) set({ cmp: c }); }, { passive: true });
